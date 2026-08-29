@@ -50,6 +50,9 @@ type expressionComparisonPredicate struct {
 func EqualExpressions(left, right Expression) Predicate {
 	return expressionComparisonPredicate{left: left, operator: "=", right: right}
 }
+func EqualValue(left Expression, value any) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "=", right: Value(value)}
+}
 
 func (p expressionComparisonPredicate) renderPredicate(context *renderContext) (string, error) {
 	if p.left == nil || p.right == nil {
@@ -120,6 +123,37 @@ type setPredicate struct {
 func In(column string, values ...any) Predicate { return setPredicate{column: column, values: values} }
 func NotIn(column string, values ...any) Predicate {
 	return setPredicate{column: column, values: values, not: true}
+}
+
+type expressionSetPredicate struct {
+	expression Expression
+	values     []any
+	not        bool
+}
+
+func InExpression(expression Expression, values ...any) Predicate {
+	return expressionSetPredicate{expression: expression, values: values}
+}
+func NotInExpression(expression Expression, values ...any) Predicate {
+	return expressionSetPredicate{expression: expression, values: values, not: true}
+}
+func (p expressionSetPredicate) renderPredicate(context *renderContext) (string, error) {
+	if p.expression == nil || len(p.values) == 0 {
+		return "", fmt.Errorf("SQL expression set predicate requires expression and values")
+	}
+	expression, err := p.expression.renderExpression(context)
+	if err != nil {
+		return "", err
+	}
+	placeholders := make([]string, len(p.values))
+	for index, value := range p.values {
+		placeholders[index] = context.argument(value)
+	}
+	operator := " IN "
+	if p.not {
+		operator = " NOT IN "
+	}
+	return expression + operator + "(" + strings.Join(placeholders, ", ") + ")", nil
 }
 
 func (p setPredicate) renderPredicate(context *renderContext) (string, error) {
