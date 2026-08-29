@@ -3,13 +3,34 @@ package builder
 import (
 	"fmt"
 	"strings"
+
+	"github.com/domainry/domainry-orm/dialect"
 )
 
+type conflictAction int
+
+const (
+	conflictNone conflictAction = iota
+	conflictDoNothing
+	conflictDoUpdate
+)
+
+type onConflict struct {
+	targets     []string
+	action      conflictAction
+	assignments []Assignment
+	predicate   Predicate // optional WHERE on DO UPDATE
+}
+
 type InsertBuilder struct {
-	renderer Renderer
-	table    string
-	columns  []string
-	rows     [][]any
+	renderer  Renderer
+	table     string
+	columns   []string
+	rows      [][]any
+	source    *SelectBuilder
+	returning []string
+	conflict  *onConflict
+	duplicate []Assignment // MySQL ON DUPLICATE KEY UPDATE
 }
 
 func NewInsertBuilder(renderer Renderer, table string) *InsertBuilder {
@@ -24,26 +45,133 @@ func (b *InsertBuilder) Values(values ...any) *InsertBuilder {
 	return b
 }
 
+// FromSelect populates the INSERT from a SELECT query instead of VALUES.
+func (b *InsertBuilder) FromSelect(source *SelectBuilder) *InsertBuilder {
+	b.source = source
+	return b
+}
+
+// Returning appends a RETURNING clause (PostgreSQL / SQLite).
+func (b *InsertBuilder) Returning(columns ...string) *InsertBuilder {
+	b.returning = append([]string(nil), columns...)
+	return b
+}
+
+// OnConflictDoNothing emits PostgreSQL/SQLite ON CONFLICT [ (targets) ] DO NOTHING.
+func (b *InsertBuilder) OnConflictDoNothing(targets ...string) *InsertBuilder {
+	b.conflict = &onConflict{targets: targets, action: conflictDoNothing}
+	return b
+}
+
+// OnConflictDoUpdate emits ON CONFLICT (targets) DO UPDATE SET assignments.
+func (b *InsertBuilder) OnConflictDoUpdate(targets []string, assignments ...Assignment) *InsertBuilder {
+	b.conflict = &onConflict{targets: targets, action: conflictDoUpdate, assignments: assignments}
+	return b
+}
+
+// OnConflictDoUpdateWhere adds a WHERE clause to the DO UPDATE action.
+func (b *InsertBuilder) OnConflictDoUpdateWhere(targets []string, predicate Predicate, assignments ...Assignment) *InsertBuilder {
+	b.conflict = &onConflict{targets: targets, action: conflictDoUpdate, assignments: assignments, predicate: predicate}
+	return b
+}
+
+// OnDuplicateKeyUpdate emits MySQL ON DUPLICATE KEY UPDATE assignments.
+func (b *InsertBuilder) OnDuplicateKeyUpdate(assignments ...Assignment) *InsertBuilder {
+	b.duplicate = append([]Assignment(nil), assignments...)
+	return b
+}
+
 func (b *InsertBuilder) Build() (string, []any, error) {
-	if b == nil || b.renderer == nil || b.table == "" || len(b.columns) == 0 || len(b.rows) == 0 {
-		return "", nil, fmt.Errorf("SQL insert requires renderer, table, columns, and values")
+	if b == nil || b.renderer == nil || b.table == "" || len(b.columns) == 0 {
+		return "", nil, fmt.Errorf("SQL insert requires renderer, table, and columns")
+	}
+	if len(b.rows) == 0 && b.source == nil {
+		return "", nil, fmt.Errorf("SQL insert requires values or a source query")
+	}
+	if len(b.rows) > 0 && b.source != nil {
+		return "", nil, fmt.Errorf("SQL insert cannot combine values and a source query")
 	}
 	context := &renderContext{renderer: b.renderer}
 	columns := make([]string, len(b.columns))
 	for index, column := range b.columns {
 		columns[index] = b.renderer.Identifier(column)
 	}
-	rows := make([]string, len(b.rows))
-	for rowIndex, row := range b.rows {
-		if len(row) != len(b.columns) {
-			return "", nil, fmt.Errorf("SQL insert row %d has %d values for %d columns", rowIndex, len(row), len(b.columns))
+	statement := "INSERT INTO " + b.renderer.Table(b.table) + " (" + strings.Join(columns, ", ") + ") "
+
+	if b.source != nil {
+		rendered, err := b.source.render(context, true)
+		if err != nil {
+			return "", nil, err
 		}
-		placeholders := make([]string, len(row))
-		for index, value := range row {
-			placeholders[index] = context.argument(value)
+		statement += rendered
+	} else {
+		rows := make([]string, len(b.rows))
+		for rowIndex, row := range b.rows {
+			if len(row) != len(b.columns) {
+				return "", nil, fmt.Errorf("SQL insert row %d has %d values for %d columns", rowIndex, len(row), len(b.columns))
+			}
+			placeholders := make([]string, len(row))
+			for index, value := range row {
+				placeholders[index] = context.argument(value)
+			}
+			rows[rowIndex] = "(" + strings.Join(placeholders, ", ") + ")"
 		}
-		rows[rowIndex] = "(" + strings.Join(placeholders, ", ") + ")"
+		statement += "VALUES " + strings.Join(rows, ", ")
 	}
-	statement := "INSERT INTO " + b.renderer.Table(b.table) + " (" + strings.Join(columns, ", ") + ") VALUES " + strings.Join(rows, ", ")
+
+	if b.conflict != nil {
+		clause, err := b.renderConflict(context)
+		if err != nil {
+			return "", nil, err
+		}
+		statement += clause
+	}
+	if len(b.duplicate) > 0 {
+		if b.renderer.Name() != dialect.MySQL {
+			return "", nil, fmt.Errorf("SQL ON DUPLICATE KEY UPDATE is only supported on MySQL")
+		}
+		assignments, err := renderAssignments(context, b.duplicate)
+		if err != nil {
+			return "", nil, err
+		}
+		statement += " ON DUPLICATE KEY UPDATE " + assignments
+	}
+	if returning := renderReturning(b.renderer, b.returning); returning != "" {
+		statement += returning
+	}
 	return statement, append([]any(nil), context.args...), nil
+}
+
+func (b *InsertBuilder) renderConflict(context *renderContext) (string, error) {
+	clause := " ON CONFLICT"
+	if len(b.conflict.targets) > 0 {
+		quoted := make([]string, len(b.conflict.targets))
+		for index, target := range b.conflict.targets {
+			quoted[index] = b.renderer.Identifier(target)
+		}
+		clause += " (" + strings.Join(quoted, ", ") + ")"
+	}
+	switch b.conflict.action {
+	case conflictDoNothing:
+		return clause + " DO NOTHING", nil
+	case conflictDoUpdate:
+		if len(b.conflict.assignments) == 0 {
+			return "", fmt.Errorf("SQL ON CONFLICT DO UPDATE requires assignments")
+		}
+		assignments, err := renderAssignments(context, b.conflict.assignments)
+		if err != nil {
+			return "", err
+		}
+		clause += " DO UPDATE SET " + assignments
+		if b.conflict.predicate != nil {
+			where, err := b.conflict.predicate.renderPredicate(context)
+			if err != nil {
+				return "", err
+			}
+			clause += " WHERE " + where
+		}
+		return clause, nil
+	default:
+		return "", fmt.Errorf("SQL ON CONFLICT requires an action")
+	}
 }

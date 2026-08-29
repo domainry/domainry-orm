@@ -29,20 +29,6 @@ func QualifiedColumn(qualifier, column string) Expression {
 	return qualifiedColumnExpression{qualifier: qualifier, column: column}
 }
 
-type tableColumnExpression struct{ table, column string }
-
-// TableColumn qualifies a column with the renderer's physical table name,
-// including configured schema and prefix.
-func TableColumn(table, column string) Expression {
-	return tableColumnExpression{table: table, column: column}
-}
-func (e tableColumnExpression) renderExpression(context *renderContext) (string, error) {
-	if strings.TrimSpace(e.table) == "" || strings.TrimSpace(e.column) == "" {
-		return "", fmt.Errorf("SQL table column requires table and column")
-	}
-	return context.renderer.Table(e.table) + "." + context.renderer.Identifier(e.column), nil
-}
-
 func (e qualifiedColumnExpression) renderExpression(context *renderContext) (string, error) {
 	if strings.TrimSpace(e.qualifier) == "" || strings.TrimSpace(e.column) == "" {
 		return "", fmt.Errorf("SQL qualified column requires qualifier and column")
@@ -94,11 +80,11 @@ type functionExpression struct {
 func Count(expression Expression) Expression {
 	return functionExpression{name: "COUNT", arguments: []Expression{expression}}
 }
-func CountAll() Expression {
-	return functionExpression{name: "COUNT", arguments: []Expression{keywordExpression{keyword: "*"}}}
-}
 func Sum(expression Expression) Expression {
 	return functionExpression{name: "SUM", arguments: []Expression{expression}}
+}
+func Coalesce(expressions ...Expression) Expression {
+	return functionExpression{name: "COALESCE", arguments: expressions}
 }
 func Max(expression Expression) Expression {
 	return functionExpression{name: "MAX", arguments: []Expression{expression}}
@@ -106,73 +92,91 @@ func Max(expression Expression) Expression {
 func Min(expression Expression) Expression {
 	return functionExpression{name: "MIN", arguments: []Expression{expression}}
 }
-func Coalesce(expressions ...Expression) Expression {
-	return functionExpression{name: "COALESCE", arguments: expressions}
-}
 func Lower(expression Expression) Expression {
 	return functionExpression{name: "LOWER", arguments: []Expression{expression}}
 }
 
-type keywordExpression struct{ keyword string }
+// CountAll renders COUNT(*).
+func CountAll() Expression { return functionExpression{name: "COUNT", arguments: []Expression{Star()}} }
 
-func AllColumns() Expression { return keywordExpression{keyword: "*"} }
-
-func (e keywordExpression) renderExpression(*renderContext) (string, error) {
-	if e.keyword != "*" {
-		return "", fmt.Errorf("unsupported SQL keyword expression")
-	}
-	return e.keyword, nil
-}
+// -----------------------------------------------------------------------------
+// CASE expression
+// -----------------------------------------------------------------------------
 
 type caseBranch struct {
-	predicate Predicate
-	value     Expression
-}
-type caseExpression struct {
-	branches  []caseBranch
-	otherwise Expression
+	when Predicate
+	then any
 }
 
-func CaseWhen(predicate Predicate, value any) *caseExpression {
-	return &caseExpression{branches: []caseBranch{{predicate: predicate, value: Value(value)}}}
+type caseExpression struct {
+	branches   []caseBranch
+	hasElse    bool
+	elseResult any
 }
-func (e *caseExpression) When(predicate Predicate, value any) *caseExpression {
-	e.branches = append(e.branches, caseBranch{predicate: predicate, value: Value(value)})
+
+// CaseWhen starts a searched CASE expression with its first WHEN branch.
+func CaseWhen(when Predicate, then any) *caseExpression {
+	return &caseExpression{branches: []caseBranch{{when: when, then: then}}}
+}
+
+// When appends another WHEN branch.
+func (e *caseExpression) When(when Predicate, then any) *caseExpression {
+	e.branches = append(e.branches, caseBranch{when: when, then: then})
 	return e
 }
-func (e *caseExpression) Else(value any) Expression {
-	e.otherwise = Value(value)
+
+// Else sets the ELSE result and terminates the builder chain.
+func (e *caseExpression) Else(result any) *caseExpression {
+	e.hasElse = true
+	e.elseResult = result
 	return e
 }
+
 func (e *caseExpression) renderExpression(context *renderContext) (string, error) {
-	if e == nil || len(e.branches) == 0 || e.otherwise == nil {
-		return "", fmt.Errorf("SQL case expression requires branches and fallback")
+	if len(e.branches) == 0 {
+		return "", fmt.Errorf("SQL case expression requires at least one WHEN branch")
 	}
 	statement := "CASE"
 	for _, branch := range e.branches {
-		if branch.predicate == nil || branch.value == nil {
-			return "", fmt.Errorf("SQL case branch is invalid")
+		if branch.when == nil {
+			return "", fmt.Errorf("SQL case WHEN predicate is required")
 		}
-		condition, err := branch.predicate.renderPredicate(context)
+		when, err := branch.when.renderPredicate(context)
 		if err != nil {
 			return "", err
 		}
-		value, err := branch.value.renderExpression(context)
+		then, err := caseResult(context, branch.then)
 		if err != nil {
 			return "", err
 		}
-		statement += " WHEN " + condition + " THEN " + value
+		statement += " WHEN " + when + " THEN " + then
 	}
-	fallback, err := e.otherwise.renderExpression(context)
-	if err != nil {
-		return "", err
+	if e.hasElse {
+		result, err := caseResult(context, e.elseResult)
+		if err != nil {
+			return "", err
+		}
+		statement += " ELSE " + result
 	}
-	return statement + " ELSE " + fallback + " END", nil
+	return statement + " END", nil
+}
+
+// caseResult renders a CASE THEN/ELSE result. Expression values are rendered
+// inline; any other value is bound as a placeholder argument.
+func caseResult(context *renderContext, value any) (string, error) {
+	if expression, ok := value.(Expression); ok {
+		return expression.renderExpression(context)
+	}
+	return context.argument(value), nil
 }
 
 func (e functionExpression) renderExpression(context *renderContext) (string, error) {
+	if strings.TrimSpace(e.name) == "" {
+		return "", fmt.Errorf("SQL function expression requires a name")
+	}
 	if len(e.arguments) == 0 {
-		return "", fmt.Errorf("SQL function expression requires arguments")
+		// Zero-argument functions such as ROW_NUMBER() render with empty parens.
+		return e.name + "()", nil
 	}
 	arguments := make([]string, len(e.arguments))
 	for index, argument := range e.arguments {

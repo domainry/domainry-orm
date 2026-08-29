@@ -5,16 +5,14 @@ import (
 	"strings"
 )
 
-type assignment struct {
-	column     string
-	expression Expression
-}
+var errAssignment = fmt.Errorf("SQL assignment is invalid")
 
 type UpdateBuilder struct {
 	renderer    Renderer
 	table       string
-	assignments []assignment
+	assignments []Assignment
 	predicate   Predicate
+	returning   []string
 }
 
 func NewUpdateBuilder(renderer Renderer, table string) *UpdateBuilder {
@@ -24,10 +22,16 @@ func (b *UpdateBuilder) Set(column string, value any) *UpdateBuilder {
 	return b.SetExpression(column, Value(value))
 }
 func (b *UpdateBuilder) SetExpression(column string, expression Expression) *UpdateBuilder {
-	b.assignments = append(b.assignments, assignment{column: column, expression: expression})
+	b.assignments = append(b.assignments, AssignExpression(column, expression))
 	return b
 }
 func (b *UpdateBuilder) Where(predicate Predicate) *UpdateBuilder { b.predicate = predicate; return b }
+
+// Returning appends a RETURNING clause (PostgreSQL / SQLite).
+func (b *UpdateBuilder) Returning(columns ...string) *UpdateBuilder {
+	b.returning = append([]string(nil), columns...)
+	return b
+}
 
 func (b *UpdateBuilder) Build() (string, []any, error) {
 	if b == nil || b.renderer == nil || b.table == "" || len(b.assignments) == 0 {
@@ -37,21 +41,33 @@ func (b *UpdateBuilder) Build() (string, []any, error) {
 		return "", nil, fmt.Errorf("SQL update requires an explicit predicate")
 	}
 	context := &renderContext{renderer: b.renderer}
-	assignments := make([]string, len(b.assignments))
-	for index, assignment := range b.assignments {
-		if strings.TrimSpace(assignment.column) == "" || assignment.expression == nil {
-			return "", nil, fmt.Errorf("SQL update assignment is invalid")
-		}
-		expression, err := assignment.expression.renderExpression(context)
-		if err != nil {
-			return "", nil, err
-		}
-		assignments[index] = b.renderer.Identifier(assignment.column) + " = " + expression
+	assignments, err := renderAssignments(context, b.assignments)
+	if err != nil {
+		return "", nil, err
 	}
 	where, err := b.predicate.renderPredicate(context)
 	if err != nil {
 		return "", nil, err
 	}
-	statement := "UPDATE " + b.renderer.Table(b.table) + " SET " + strings.Join(assignments, ", ") + " WHERE " + where
+	statement := "UPDATE " + b.renderer.Table(b.table) + " SET " + assignments + " WHERE " + where
+	if returning := renderReturning(b.renderer, b.returning); returning != "" {
+		statement += returning
+	}
 	return statement, append([]any(nil), context.args...), nil
+}
+
+// renderReturning renders a shared RETURNING clause for INSERT/UPDATE/DELETE.
+func renderReturning(renderer Renderer, columns []string) string {
+	if len(columns) == 0 {
+		return ""
+	}
+	quoted := make([]string, len(columns))
+	for index, column := range columns {
+		if strings.TrimSpace(column) == "*" {
+			quoted[index] = "*"
+			continue
+		}
+		quoted[index] = renderer.Identifier(column)
+	}
+	return " RETURNING " + strings.Join(quoted, ", ")
 }
