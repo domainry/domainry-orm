@@ -41,6 +41,26 @@ func TestPublishedExpressionCompatibility(t *testing.T) {
 	}
 }
 
+func TestPrepareSQLFragments(t *testing.T) {
+	renderer := postgresRenderer(t)
+	predicate, args, err := builder.PreparePredicate(renderer, builder.And(
+		builder.Equal("workspace_id", "workspace"), builder.In("status", "open", "closed"),
+	), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if predicate != `("workspace_id" = $4 AND "status" IN ($5, $6))` || len(args) != 3 {
+		t.Fatalf("unexpected prepared predicate: %s %#v", predicate, args)
+	}
+	order, err := builder.PrepareOrderBy(renderer, builder.Descending("created_at"), builder.Ascending("id"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order != `ORDER BY "created_at" DESC, "id" ASC` {
+		t.Fatalf("unexpected prepared order: %s", order)
+	}
+}
+
 func TestBuildersRenderAcrossSupportedDialects(t *testing.T) {
 	tests := []struct {
 		name      string
