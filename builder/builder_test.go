@@ -25,6 +25,22 @@ func TestBuilderAcceptsRendererWithoutDialectName(t *testing.T) {
 	}
 }
 
+func TestPublishedExpressionCompatibility(t *testing.T) {
+	renderer, err := dialect.ParseRenderer("postgres", "runtime", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, args, err := builder.NewSelectBuilder(renderer, "records").Projections(
+		builder.Project(builder.TableColumn("records", "id")), builder.Project(builder.AllColumns()),
+	).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query != `SELECT "runtime"."records"."id", * FROM "runtime"."records"` || len(args) != 0 {
+		t.Fatalf("unexpected compatibility expression result: %s %#v", query, args)
+	}
+}
+
 func TestBuildersRenderAcrossSupportedDialects(t *testing.T) {
 	tests := []struct {
 		name      string

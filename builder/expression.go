@@ -29,6 +29,24 @@ func QualifiedColumn(qualifier, column string) Expression {
 	return qualifiedColumnExpression{qualifier: qualifier, column: column}
 }
 
+type tableColumnExpression struct {
+	table  string
+	column string
+}
+
+// TableColumn qualifies a column with the renderer's physical table name,
+// including any configured schema or prefix.
+func TableColumn(table, column string) Expression {
+	return tableColumnExpression{table: table, column: column}
+}
+
+func (e tableColumnExpression) renderExpression(context *renderContext) (string, error) {
+	if strings.TrimSpace(e.table) == "" || strings.TrimSpace(e.column) == "" {
+		return "", fmt.Errorf("SQL table column requires table and column")
+	}
+	return context.renderer.Table(e.table) + "." + context.renderer.Identifier(e.column), nil
+}
+
 func (e qualifiedColumnExpression) renderExpression(context *renderContext) (string, error) {
 	if strings.TrimSpace(e.qualifier) == "" || strings.TrimSpace(e.column) == "" {
 		return "", fmt.Errorf("SQL qualified column requires qualifier and column")
@@ -98,6 +116,9 @@ func Lower(expression Expression) Expression {
 
 // CountAll renders COUNT(*).
 func CountAll() Expression { return functionExpression{name: "COUNT", arguments: []Expression{Star()}} }
+
+// AllColumns is the compatibility name for an unqualified star expression.
+func AllColumns() Expression { return Star() }
 
 // -----------------------------------------------------------------------------
 // CASE expression
