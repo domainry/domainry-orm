@@ -360,6 +360,32 @@ func (b *AddColumnBuilder) Build() (string, []any, error) {
 	return "ALTER TABLE " + b.renderer.Table(b.table) + " ADD COLUMN " + definition, []any{}, nil
 }
 
+type RenameColumnBuilder struct {
+	renderer Renderer
+	table    string
+	from     string
+	to       string
+}
+
+func NewRenameColumnBuilder(renderer Renderer, table, from, to string) *RenameColumnBuilder {
+	return &RenameColumnBuilder{
+		renderer: renderer,
+		table:    strings.TrimSpace(table),
+		from:     strings.TrimSpace(from),
+		to:       strings.TrimSpace(to),
+	}
+}
+
+func (b *RenameColumnBuilder) Build() (string, []any, error) {
+	if b == nil || b.renderer == nil || b.table == "" || b.from == "" || b.to == "" {
+		return "", nil, fmt.Errorf("SQL rename column requires renderer, table, source, and target")
+	}
+	if strings.EqualFold(b.from, b.to) {
+		return "", nil, fmt.Errorf("SQL rename column source and target must differ")
+	}
+	return "ALTER TABLE " + b.renderer.Table(b.table) + " RENAME COLUMN " + b.renderer.Identifier(b.from) + " TO " + b.renderer.Identifier(b.to), []any{}, nil
+}
+
 type CreateIndexBuilder struct {
 	renderer    Renderer
 	index       string

@@ -112,6 +112,19 @@ func TestCreateTableBuilderAcceptsSystemOnlyTableAndRejectsInvalidDecimal(t *tes
 	}
 }
 
+func TestRenameColumnBuilderUsesQualifiedPreparedIdentifiers(t *testing.T) {
+	for _, name := range []dialect.Name{dialect.SQLite, dialect.MySQL, dialect.Postgres} {
+		statement, args, err := builder.NewRenameColumnBuilder(schemaRenderer(t, name), "records", "create_user_id", "create_by").Build()
+		if err != nil || len(args) != 0 || !strings.Contains(statement, "ALTER TABLE") || !strings.Contains(statement, "RENAME COLUMN") {
+			t.Fatalf("%s rename statement=%q args=%v err=%v", name, statement, args, err)
+		}
+	}
+	renderer := schemaRenderer(t, dialect.SQLite)
+	if _, _, err := builder.NewRenameColumnBuilder(renderer, "records", "create_by", "create_by").Build(); err == nil {
+		t.Fatal("same source and target accepted")
+	}
+}
+
 func TestCreateTableBuilderCanDeclareInfrastructureSchema(t *testing.T) {
 	statement, _, err := builder.NewCreateTableBuilder(schemaRenderer(t, dialect.SQLite), "agent_task_runs").
 		WithoutSystemColumns().Columns(
