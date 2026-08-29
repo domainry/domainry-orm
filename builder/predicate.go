@@ -41,6 +41,76 @@ func (p comparisonPredicate) renderPredicate(context *renderContext) (string, er
 	return context.renderer.Identifier(p.column) + " " + p.operator + " " + context.argument(p.value), nil
 }
 
+type expressionComparisonPredicate struct {
+	left     Expression
+	operator string
+	right    Expression
+}
+
+func EqualExpressions(left, right Expression) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "=", right: right}
+}
+
+func (p expressionComparisonPredicate) renderPredicate(context *renderContext) (string, error) {
+	if p.left == nil || p.right == nil {
+		return "", fmt.Errorf("SQL expression comparison operands are required")
+	}
+	left, err := p.left.renderExpression(context)
+	if err != nil {
+		return "", err
+	}
+	right, err := p.right.renderExpression(context)
+	if err != nil {
+		return "", err
+	}
+	return left + " " + p.operator + " " + right, nil
+}
+
+type betweenPredicate struct {
+	column string
+	lower  any
+	upper  any
+	not    bool
+}
+
+func Between(column string, lower, upper any) Predicate {
+	return betweenPredicate{column: column, lower: lower, upper: upper}
+}
+func NotBetween(column string, lower, upper any) Predicate {
+	return betweenPredicate{column: column, lower: lower, upper: upper, not: true}
+}
+func (p betweenPredicate) renderPredicate(context *renderContext) (string, error) {
+	if strings.TrimSpace(p.column) == "" {
+		return "", fmt.Errorf("SQL between predicate column is required")
+	}
+	operator := " BETWEEN "
+	if p.not {
+		operator = " NOT BETWEEN "
+	}
+	return context.renderer.Identifier(p.column) + operator + context.argument(p.lower) + " AND " + context.argument(p.upper), nil
+}
+
+type likePredicate struct {
+	column  string
+	pattern string
+	not     bool
+}
+
+func Like(column, pattern string) Predicate { return likePredicate{column: column, pattern: pattern} }
+func NotLike(column, pattern string) Predicate {
+	return likePredicate{column: column, pattern: pattern, not: true}
+}
+func (p likePredicate) renderPredicate(context *renderContext) (string, error) {
+	if strings.TrimSpace(p.column) == "" {
+		return "", fmt.Errorf("SQL like predicate column is required")
+	}
+	operator := " LIKE "
+	if p.not {
+		operator = " NOT LIKE "
+	}
+	return context.renderer.Identifier(p.column) + operator + context.argument(p.pattern), nil
+}
+
 type setPredicate struct {
 	column string
 	values []any

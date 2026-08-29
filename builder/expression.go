@@ -20,6 +20,22 @@ func (e columnExpression) renderExpression(context *renderContext) (string, erro
 	return context.renderer.Identifier(e.column), nil
 }
 
+type qualifiedColumnExpression struct {
+	qualifier string
+	column    string
+}
+
+func QualifiedColumn(qualifier, column string) Expression {
+	return qualifiedColumnExpression{qualifier: qualifier, column: column}
+}
+
+func (e qualifiedColumnExpression) renderExpression(context *renderContext) (string, error) {
+	if strings.TrimSpace(e.qualifier) == "" || strings.TrimSpace(e.column) == "" {
+		return "", fmt.Errorf("SQL qualified column requires qualifier and column")
+	}
+	return context.renderer.Identifier(e.qualifier) + "." + context.renderer.Identifier(e.column), nil
+}
+
 type valueExpression struct{ value any }
 
 func Value(value any) Expression { return valueExpression{value: value} }
@@ -54,4 +70,37 @@ func (e arithmeticExpression) renderExpression(context *renderContext) (string, 
 		return "", err
 	}
 	return left + " " + e.operator + " " + right, nil
+}
+
+type functionExpression struct {
+	name      string
+	arguments []Expression
+}
+
+func Count(expression Expression) Expression {
+	return functionExpression{name: "COUNT", arguments: []Expression{expression}}
+}
+func Sum(expression Expression) Expression {
+	return functionExpression{name: "SUM", arguments: []Expression{expression}}
+}
+func Coalesce(expressions ...Expression) Expression {
+	return functionExpression{name: "COALESCE", arguments: expressions}
+}
+
+func (e functionExpression) renderExpression(context *renderContext) (string, error) {
+	if len(e.arguments) == 0 {
+		return "", fmt.Errorf("SQL function expression requires arguments")
+	}
+	arguments := make([]string, len(e.arguments))
+	for index, argument := range e.arguments {
+		if argument == nil {
+			return "", fmt.Errorf("SQL function argument is required")
+		}
+		rendered, err := argument.renderExpression(context)
+		if err != nil {
+			return "", err
+		}
+		arguments[index] = rendered
+	}
+	return e.name + "(" + strings.Join(arguments, ", ") + ")", nil
 }
