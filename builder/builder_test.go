@@ -61,6 +61,24 @@ func TestPrepareSQLFragments(t *testing.T) {
 	}
 }
 
+func TestStructuredPredicateExtensions(t *testing.T) {
+	renderer := sqliteRenderer(t)
+	predicate := builder.And(
+		builder.Not(builder.Equal("status", "deleted")),
+		builder.IsNotNullExpression(builder.QualifiedColumn("records", "owner_id")),
+		builder.LikeValueEscaped(builder.Lower(builder.Column("name")), "a~_%"),
+		builder.AlwaysFalse(),
+	)
+	prepared, args, err := builder.PreparePredicate(renderer, predicate, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `(NOT ("status" = ?) AND "records"."owner_id" IS NOT NULL AND LOWER("name") LIKE ? ESCAPE '~' AND 1 = 0)`
+	if prepared != want || len(args) != 2 {
+		t.Fatalf("unexpected structured predicate: %s %#v", prepared, args)
+	}
+}
+
 func TestBuildersRenderAcrossSupportedDialects(t *testing.T) {
 	tests := []struct {
 		name      string

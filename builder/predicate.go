@@ -127,6 +127,7 @@ type likePredicate struct {
 	column  string
 	pattern string
 	not     bool
+	escaped bool
 }
 
 func Like(column, pattern string) Predicate { return likePredicate{column: column, pattern: pattern} }
@@ -139,11 +140,24 @@ func LikeValue(expression Expression, pattern string) Predicate {
 func NotLikeValue(expression Expression, pattern string) Predicate {
 	return expressionLikePredicate{expression: expression, pattern: pattern, not: true}
 }
+func LikeEscaped(column, pattern string) Predicate {
+	return likePredicate{column: column, pattern: pattern, escaped: true}
+}
+func NotLikeEscaped(column, pattern string) Predicate {
+	return likePredicate{column: column, pattern: pattern, not: true, escaped: true}
+}
+func LikeValueEscaped(expression Expression, pattern string) Predicate {
+	return expressionLikePredicate{expression: expression, pattern: pattern, escaped: true}
+}
+func NotLikeValueEscaped(expression Expression, pattern string) Predicate {
+	return expressionLikePredicate{expression: expression, pattern: pattern, not: true, escaped: true}
+}
 
 type expressionLikePredicate struct {
 	expression Expression
 	pattern    string
 	not        bool
+	escaped    bool
 }
 
 func (p expressionLikePredicate) renderPredicate(context *renderContext) (string, error) {
@@ -158,7 +172,11 @@ func (p expressionLikePredicate) renderPredicate(context *renderContext) (string
 	if p.not {
 		operator = " NOT LIKE "
 	}
-	return expression + operator + context.argument(p.pattern), nil
+	prepared := expression + operator + context.argument(p.pattern)
+	if p.escaped {
+		prepared += " ESCAPE '~'"
+	}
+	return prepared, nil
 }
 func (p likePredicate) renderPredicate(context *renderContext) (string, error) {
 	if strings.TrimSpace(p.column) == "" {
@@ -168,7 +186,11 @@ func (p likePredicate) renderPredicate(context *renderContext) (string, error) {
 	if p.not {
 		operator = " NOT LIKE "
 	}
-	return context.renderer.Identifier(p.column) + operator + context.argument(p.pattern), nil
+	prepared := context.renderer.Identifier(p.column) + operator + context.argument(p.pattern)
+	if p.escaped {
+		prepared += " ESCAPE '~'"
+	}
+	return prepared, nil
 }
 
 type setPredicate struct {
@@ -229,22 +251,65 @@ func (p setPredicate) renderPredicate(context *renderContext) (string, error) {
 }
 
 type nullPredicate struct {
-	column string
-	not    bool
+	column     string
+	expression Expression
+	not        bool
 }
 
 func IsNull(column string) Predicate    { return nullPredicate{column: column} }
 func IsNotNull(column string) Predicate { return nullPredicate{column: column, not: true} }
+func IsNullExpression(expression Expression) Predicate {
+	return nullPredicate{expression: expression}
+}
+func IsNotNullExpression(expression Expression) Predicate {
+	return nullPredicate{expression: expression, not: true}
+}
 
 func (p nullPredicate) renderPredicate(context *renderContext) (string, error) {
-	if strings.TrimSpace(p.column) == "" {
+	operand := ""
+	if p.expression != nil {
+		prepared, err := p.expression.renderExpression(context)
+		if err != nil {
+			return "", err
+		}
+		operand = prepared
+	} else if strings.TrimSpace(p.column) != "" {
+		operand = context.renderer.Identifier(p.column)
+	} else {
 		return "", fmt.Errorf("SQL null predicate column is required")
 	}
 	operator := " IS NULL"
 	if p.not {
 		operator = " IS NOT NULL"
 	}
-	return context.renderer.Identifier(p.column) + operator, nil
+	return operand + operator, nil
+}
+
+type constantPredicate bool
+
+func AlwaysFalse() Predicate { return constantPredicate(false) }
+func AlwaysTrue() Predicate  { return constantPredicate(true) }
+
+func (p constantPredicate) renderPredicate(*renderContext) (string, error) {
+	if p {
+		return "1 = 1", nil
+	}
+	return "1 = 0", nil
+}
+
+type notPredicate struct{ predicate Predicate }
+
+func Not(predicate Predicate) Predicate { return notPredicate{predicate: predicate} }
+
+func (p notPredicate) renderPredicate(context *renderContext) (string, error) {
+	if p.predicate == nil {
+		return "", fmt.Errorf("SQL NOT predicate requires child")
+	}
+	prepared, err := p.predicate.renderPredicate(context)
+	if err != nil {
+		return "", err
+	}
+	return "NOT (" + prepared + ")", nil
 }
 
 type compoundPredicate struct {
