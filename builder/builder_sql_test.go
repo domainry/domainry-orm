@@ -519,3 +519,140 @@ func TestBuilderErrors(t *testing.T) {
 		})
 	}
 }
+
+// -----------------------------------------------------------------------------
+// Full API surface coverage: every remaining constructor not exercised above.
+// -----------------------------------------------------------------------------
+
+func TestExpressionCoverage(t *testing.T) {
+	tests := []struct {
+		name     string
+		build    func(dialect.Renderer) (string, []any, error)
+		wantSQL  string
+		wantArgs []any
+	}{
+		{
+			name: "count all",
+			build: func(r dialect.Renderer) (string, []any, error) {
+				return builder.NewSelectBuilder(r, "t").Projections(builder.ProjectAs(builder.CountAll(), "n")).Build()
+			},
+			wantSQL: `SELECT COUNT(*) AS "n" FROM "t"`,
+		},
+		{
+			name: "count column",
+			build: func(r dialect.Renderer) (string, []any, error) {
+				return builder.NewSelectBuilder(r, "t").Projections(builder.Project(builder.Count(builder.Column("id")))).Build()
+			},
+			wantSQL: `SELECT COUNT("id") FROM "t"`,
+		},
+		{
+			name: "max and min",
+			build: func(r dialect.Renderer) (string, []any, error) {
+				return builder.NewSelectBuilder(r, "t").Projections(
+					builder.ProjectAs(builder.Max(builder.Column("price")), "hi"),
+					builder.ProjectAs(builder.Min(builder.Column("price")), "lo"),
+				).Build()
+			},
+			wantSQL: `SELECT MAX("price") AS "hi", MIN("price") AS "lo" FROM "t"`,
+		},
+		{
+			name: "lower",
+			build: func(r dialect.Renderer) (string, []any, error) {
+				return builder.NewSelectBuilder(r, "t").Projections(builder.Project(builder.Lower(builder.Column("name")))).Build()
+			},
+			wantSQL: `SELECT LOWER("name") FROM "t"`,
+		},
+		{
+			name: "add and subtract nested",
+			build: func(r dialect.Renderer) (string, []any, error) {
+				return builder.NewSelectBuilder(r, "t").Projections(
+					builder.ProjectAs(builder.Add(builder.Subtract(builder.Column("a"), builder.Column("b")), builder.Value(1)), "x"),
+				).Build()
+			},
+			wantSQL:  `SELECT "a" - "b" + ? AS "x" FROM "t"`,
+			wantArgs: []any{1},
+		},
+		{
+			name: "case with multiple when branches",
+			build: func(r dialect.Renderer) (string, []any, error) {
+				return builder.NewSelectBuilder(r, "t").Projections(
+					builder.ProjectAs(builder.CaseWhen(builder.Equal("grade", "A"), 4).
+						When(builder.Equal("grade", "B"), 3).
+						When(builder.Equal("grade", "C"), 2).
+						Else(0), "gpa"),
+				).Build()
+			},
+			wantSQL:  `SELECT CASE WHEN "grade" = ? THEN ? WHEN "grade" = ? THEN ? WHEN "grade" = ? THEN ? ELSE ? END AS "gpa" FROM "t"`,
+			wantArgs: []any{"A", 4, "B", 3, "C", 2, 0},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sql, args, err := test.build(sqliteRenderer(t))
+			assertSQL(t, sql, args, err, test.wantSQL, test.wantArgs)
+		})
+	}
+}
+
+func TestPredicateExpressionComparisonCoverage(t *testing.T) {
+	col := func(c string) builder.Expression { return builder.QualifiedColumn("t", c) }
+	tests := []struct {
+		name      string
+		predicate builder.Predicate
+		wantSQL   string
+		wantArgs  []any
+	}{
+		{"not equal expressions", builder.NotEqualExpressions(col("a"), col("b")), `"t"."a" <> "t"."b"`, nil},
+		{"less than expressions", builder.LessThanExpressions(col("a"), col("b")), `"t"."a" < "t"."b"`, nil},
+		{"less or equal expressions", builder.LessThanOrEqualExpressions(col("a"), col("b")), `"t"."a" <= "t"."b"`, nil},
+		{"greater than expressions", builder.GreaterThanExpressions(col("a"), col("b")), `"t"."a" > "t"."b"`, nil},
+		{"greater or equal expressions", builder.GreaterThanOrEqualExpressions(col("a"), col("b")), `"t"."a" >= "t"."b"`, nil},
+		{"not equal value", builder.NotEqualValue(col("a"), 1), `"t"."a" <> ?`, []any{1}},
+		{"less than value", builder.LessThanValue(col("a"), 1), `"t"."a" < ?`, []any{1}},
+		{"less or equal value", builder.LessThanOrEqualValue(col("a"), 1), `"t"."a" <= ?`, []any{1}},
+		{"greater than value", builder.GreaterThanExpression(col("a"), 1), `"t"."a" > ?`, []any{1}},
+		{"greater or equal value", builder.GreaterThanOrEqualValue(col("a"), 1), `"t"."a" >= ?`, []any{1}},
+		{"like value", builder.LikeValue(col("a"), "x%"), `"t"."a" LIKE ?`, []any{"x%"}},
+		{"not like value", builder.NotLikeValue(col("a"), "x%"), `"t"."a" NOT LIKE ?`, []any{"x%"}},
+		{"not in expression", builder.NotInExpression(col("a"), 1, 2), `"t"."a" NOT IN (?, ?)`, []any{1, 2}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sql, args, err := builder.NewSelectBuilder(sqliteRenderer(t), "t").Columns("id").Where(test.predicate).Build()
+			assertSQL(t, sql, args, err, `SELECT "id" FROM "t" WHERE `+test.wantSQL, test.wantArgs)
+		})
+	}
+}
+
+func TestOrderByExpressionCoverage(t *testing.T) {
+	t.Run("ascending expression", func(t *testing.T) {
+		sql, args, err := builder.NewSelectBuilder(sqliteRenderer(t), "t").Columns("id").
+			OrderBy(builder.AscendingExpression(builder.Lower(builder.Column("name")))).Build()
+		assertSQL(t, sql, args, err, `SELECT "id" FROM "t" ORDER BY LOWER("name") ASC`, nil)
+	})
+	t.Run("descending expression", func(t *testing.T) {
+		sql, args, err := builder.NewSelectBuilder(sqliteRenderer(t), "t").Columns("id").
+			OrderBy(builder.DescendingExpression(builder.Count(builder.Column("id")))).Build()
+		assertSQL(t, sql, args, err, `SELECT "id" FROM "t" ORDER BY COUNT("id") DESC`, nil)
+	})
+	t.Run("mixed column and expression order", func(t *testing.T) {
+		sql, args, err := builder.NewSelectBuilder(sqliteRenderer(t), "t").Columns("id").OrderBy(
+			builder.Ascending("a"),
+			builder.DescendingExpression(builder.Lower(builder.Column("b"))),
+		).Build()
+		assertSQL(t, sql, args, err, `SELECT "id" FROM "t" ORDER BY "a" ASC, LOWER("b") DESC`, nil)
+	})
+}
+
+func TestExpressionLikeInHaving(t *testing.T) {
+	sql, args, err := builder.NewSelectBuilder(sqliteRenderer(t), "t").
+		Projections(builder.Project(builder.Column("bucket")), builder.ProjectAs(builder.Count(builder.Column("id")), "n")).
+		GroupBy(builder.Column("bucket")).
+		Having(builder.And(
+			builder.GreaterThanExpression(builder.Count(builder.Column("id")), 5),
+			builder.LikeValue(builder.Lower(builder.Column("bucket")), "a%"),
+		)).Build()
+	assertSQL(t, sql, args, err,
+		`SELECT "bucket", COUNT("id") AS "n" FROM "t" GROUP BY "bucket" HAVING (COUNT("id") > ? AND LOWER("bucket") LIKE ?)`,
+		[]any{5, "a%"})
+}
