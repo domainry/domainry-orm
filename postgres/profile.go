@@ -13,8 +13,9 @@ import (
 
 type Profile struct{}
 
-func NewProfile() Profile          { return Profile{} }
-func (Profile) Name() dialect.Name { return dialect.Postgres }
+func NewProfile() Profile                    { return Profile{} }
+func (Profile) Name() dialect.Name           { return dialect.Postgres }
+func (Profile) TextKeyColumnType(int) string { return "TEXT" }
 func (Profile) Capabilities() ormdriver.Capabilities {
 	return ormdriver.Capabilities{Returning: true, RowLock: true, SkipLocked: true, AdvisoryLock: true, PartialIndex: true, IndexIfNotExists: true, RowLevelSecurity: true, NativeJSON: true, TransactionalDDL: true, MaximumBindParameters: 65535}
 }
@@ -30,6 +31,10 @@ func (Profile) ApplyClaimLock(value *builder.SelectBuilder, skipLocked bool) (*b
 	}
 	return value.ForUpdate(), nil
 }
+func (Profile) ApplyCreateIndex(value *builder.CreateIndexBuilder) *builder.CreateIndexBuilder {
+	return value.IfNotExists()
+}
+func (Profile) IsCreateIndexAlreadyExists(error) bool { return false }
 func (Profile) ClassifyError(err error) ormdriver.ErrorKind {
 	if err == nil {
 		return ormdriver.ErrorUnknown

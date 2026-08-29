@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/domainry/domainry-orm/builder"
@@ -12,8 +13,9 @@ import (
 
 type Profile struct{}
 
-func NewProfile() Profile          { return Profile{} }
-func (Profile) Name() dialect.Name { return dialect.MySQL }
+func NewProfile() Profile                           { return Profile{} }
+func (Profile) Name() dialect.Name                  { return dialect.MySQL }
+func (Profile) TextKeyColumnType(length int) string { return fmt.Sprintf("VARCHAR(%d)", length) }
 func (Profile) Capabilities() ormdriver.Capabilities {
 	return ormdriver.Capabilities{RowLock: true, SkipLocked: true, AdvisoryLock: true, NativeJSON: true, MaximumBindParameters: 65535}
 }
@@ -28,6 +30,16 @@ func (Profile) ApplyClaimLock(value *builder.SelectBuilder, skipLocked bool) (*b
 		return value.ForUpdate("SKIP LOCKED"), nil
 	}
 	return value.ForUpdate(), nil
+}
+func (Profile) ApplyCreateIndex(value *builder.CreateIndexBuilder) *builder.CreateIndexBuilder {
+	return value
+}
+func (Profile) IsCreateIndexAlreadyExists(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "duplicate key name") || strings.Contains(message, "error 1061")
 }
 func (Profile) ClassifyError(err error) ormdriver.ErrorKind {
 	if err == nil {

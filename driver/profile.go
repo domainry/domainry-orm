@@ -38,9 +38,12 @@ type Capabilities struct {
 type Profile interface {
 	Name() dialect.Name
 	Capabilities() Capabilities
+	TextKeyColumnType(int) string
 	ApplyUpsert(*builder.InsertBuilder, []string, ...builder.Assignment) (*builder.InsertBuilder, error)
 	ApplyReturning(*builder.InsertBuilder, ...string) (*builder.InsertBuilder, error)
 	ApplyClaimLock(*builder.SelectBuilder, bool) (*builder.SelectBuilder, error)
+	ApplyCreateIndex(*builder.CreateIndexBuilder) *builder.CreateIndexBuilder
+	IsCreateIndexAlreadyExists(error) bool
 	ClassifyError(error) ErrorKind
 }
 

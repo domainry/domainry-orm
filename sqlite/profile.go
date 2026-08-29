@@ -12,8 +12,9 @@ import (
 
 type Profile struct{}
 
-func NewProfile() Profile          { return Profile{} }
-func (Profile) Name() dialect.Name { return dialect.SQLite }
+func NewProfile() Profile                    { return Profile{} }
+func (Profile) Name() dialect.Name           { return dialect.SQLite }
+func (Profile) TextKeyColumnType(int) string { return "TEXT" }
 func (Profile) Capabilities() ormdriver.Capabilities {
 	return ormdriver.Capabilities{Returning: true, PartialIndex: true, IndexIfNotExists: true, TransactionalDDL: true, MaximumBindParameters: 999}
 }
@@ -26,6 +27,10 @@ func (Profile) ApplyReturning(value *builder.InsertBuilder, columns ...string) (
 func (Profile) ApplyClaimLock(*builder.SelectBuilder, bool) (*builder.SelectBuilder, error) {
 	return nil, ormdriver.ErrRowLockUnsupported
 }
+func (Profile) ApplyCreateIndex(value *builder.CreateIndexBuilder) *builder.CreateIndexBuilder {
+	return value.IfNotExists()
+}
+func (Profile) IsCreateIndexAlreadyExists(error) bool { return false }
 func (Profile) ClassifyError(err error) ormdriver.ErrorKind {
 	if err == nil {
 		return ormdriver.ErrorUnknown
