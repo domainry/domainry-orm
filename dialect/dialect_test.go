@@ -68,6 +68,31 @@ func TestParseAndSchemaBoundRenderer(t *testing.T) {
 	}
 }
 
+func TestNamespaceRenderer(t *testing.T) {
+	for _, test := range []struct {
+		name Name
+		want string
+	}{
+		{name: SQLite, want: `"runtime"."dr_records"`},
+		{name: MySQL, want: "`runtime`.`dr_records`"},
+		{name: Postgres, want: `"runtime"."dr_records"`},
+	} {
+		renderer, err := ParseRenderer(string(test.name), "runtime", "dr_")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := renderer.Table("records"); got != test.want {
+			t.Fatalf("%s table = %q, want %q", test.name, got, test.want)
+		}
+	}
+	if _, err := ParseRenderer("sqlite", "unsafe;schema", ""); err == nil {
+		t.Fatal("unsafe schema accepted")
+	}
+	if _, err := ParseRenderer("sqlite", "", "unsafe-prefix"); err == nil {
+		t.Fatal("unsafe table prefix accepted")
+	}
+}
+
 func assertPanics(t *testing.T, run func()) {
 	t.Helper()
 	defer func() {
