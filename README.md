@@ -13,3 +13,4 @@ with their owning modules.
 - `sqlhost`: narrow `database/sql` execution and transaction contracts.
 - `dialect`: portable SQL identifier, table, placeholder, and insert behavior.
 - `migration`: source-owned migration and physical baseline declarations.
+- `postgres`: PostgreSQL capability probes, retry, and safe failure classification.
