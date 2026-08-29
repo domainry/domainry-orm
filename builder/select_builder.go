@@ -119,7 +119,7 @@ func (b *SelectBuilder) Build() (string, []any, error) {
 	if len(b.orders) > 0 {
 		orders := make([]string, len(b.orders))
 		for index, order := range b.orders {
-			rendered, err := order.render(b.renderer)
+			rendered, err := order.render(context)
 			if err != nil {
 				return "", nil, err
 			}

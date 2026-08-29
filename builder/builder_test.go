@@ -57,11 +57,11 @@ func TestSelectBuilderAggregateCaseAndLower(t *testing.T) {
 			builder.Project(builder.CountAll()),
 			builder.Project(builder.Coalesce(builder.Sum(builder.CaseWhen(builder.Or(builder.Equal("state", "open"), builder.Equal("alert", "firing")), 1).Else(0)), builder.Value(0))),
 			builder.Project(builder.Lower(builder.Column("search_text"))),
-		).Build()
+		).OrderBy(builder.DescendingExpression(builder.CountAll())).Build()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(statement, "COUNT(*)") || !strings.Contains(statement, "CASE WHEN") || !strings.Contains(statement, "LOWER(") {
+		if !strings.Contains(statement, "COUNT(*)") || !strings.Contains(statement, "CASE WHEN") || !strings.Contains(statement, "LOWER(") || !strings.Contains(statement, "ORDER BY COUNT(*) DESC") {
 			t.Fatalf("%s statement=%s", name, statement)
 		}
 		if len(args) != 5 {
