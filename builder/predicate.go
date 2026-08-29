@@ -133,6 +133,33 @@ func Like(column, pattern string) Predicate { return likePredicate{column: colum
 func NotLike(column, pattern string) Predicate {
 	return likePredicate{column: column, pattern: pattern, not: true}
 }
+func LikeValue(expression Expression, pattern string) Predicate {
+	return expressionLikePredicate{expression: expression, pattern: pattern}
+}
+func NotLikeValue(expression Expression, pattern string) Predicate {
+	return expressionLikePredicate{expression: expression, pattern: pattern, not: true}
+}
+
+type expressionLikePredicate struct {
+	expression Expression
+	pattern    string
+	not        bool
+}
+
+func (p expressionLikePredicate) renderPredicate(context *renderContext) (string, error) {
+	if p.expression == nil {
+		return "", fmt.Errorf("SQL like expression is required")
+	}
+	expression, err := p.expression.renderExpression(context)
+	if err != nil {
+		return "", err
+	}
+	operator := " LIKE "
+	if p.not {
+		operator = " NOT LIKE "
+	}
+	return expression + operator + context.argument(p.pattern), nil
+}
 func (p likePredicate) renderPredicate(context *renderContext) (string, error) {
 	if strings.TrimSpace(p.column) == "" {
 		return "", fmt.Errorf("SQL like predicate column is required")
