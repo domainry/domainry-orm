@@ -86,6 +86,12 @@ func CountAll() Expression {
 func Sum(expression Expression) Expression {
 	return functionExpression{name: "SUM", arguments: []Expression{expression}}
 }
+func Max(expression Expression) Expression {
+	return functionExpression{name: "MAX", arguments: []Expression{expression}}
+}
+func Min(expression Expression) Expression {
+	return functionExpression{name: "MIN", arguments: []Expression{expression}}
+}
 func Coalesce(expressions ...Expression) Expression {
 	return functionExpression{name: "COALESCE", arguments: expressions}
 }
