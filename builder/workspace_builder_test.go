@@ -79,6 +79,25 @@ func TestWorkspaceKeysetPaginationBindsIDAndLimit(t *testing.T) {
 	}
 }
 
+func TestWorkspaceSelectQualifiesMandatoryScopeWhenBaseTableHasAlias(t *testing.T) {
+	renderer := workspaceRenderer(t, dialect.Postgres)
+	statement, args, err := builder.NewWorkspaceSelectBuilder(renderer, "orders", "workspace-a").
+		Alias("o").
+		Projections(builder.Project(builder.QualifiedColumn("o", "id"))).
+		Join(builder.InnerJoin("order_items", "i", builder.EqualExpressions(
+			builder.QualifiedColumn("i", "order_id"), builder.QualifiedColumn("o", "id"),
+		))).
+		Where(builder.EqualValue(builder.QualifiedColumn("i", "status"), "open")).
+		Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `SELECT "o"."id" FROM "orders" AS "o" INNER JOIN "order_items" AS "i" ON "i"."order_id" = "o"."id" WHERE ("o"."workspace_id" = $1 AND "i"."status" = $2)`
+	if statement != want || !reflect.DeepEqual(args, []any{"workspace-a", "open"}) {
+		t.Fatalf("statement=%s args=%#v", statement, args)
+	}
+}
+
 func TestInsertedValueRendersPerDialectWithoutRawSQL(t *testing.T) {
 	for _, test := range []struct {
 		name dialect.Name

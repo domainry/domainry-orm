@@ -37,6 +37,7 @@ type SelectBuilder struct {
 	combinations  []combination
 	required      []Predicate
 	workspaceMode bool
+	workspaceID   string
 	buildError    error
 }
 
@@ -296,8 +297,16 @@ func (b *SelectBuilder) render(context *renderContext, topLevel bool) (string, e
 		statement += " " + rendered
 	}
 	predicate := b.predicate
-	if len(b.required) > 0 {
-		parts := append([]Predicate(nil), b.required...)
+	required := append([]Predicate(nil), b.required...)
+	if b.workspaceMode {
+		workspacePredicate := Predicate(Equal(WorkspaceIDColumn, b.workspaceID))
+		if b.alias != "" {
+			workspacePredicate = EqualValue(QualifiedColumn(b.alias, WorkspaceIDColumn), b.workspaceID)
+		}
+		required = append([]Predicate{workspacePredicate}, required...)
+	}
+	if len(required) > 0 {
+		parts := append([]Predicate(nil), required...)
 		if predicate != nil {
 			parts = append(parts, predicate)
 		}

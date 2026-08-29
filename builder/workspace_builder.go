@@ -25,7 +25,7 @@ func NewWorkspaceSelectBuilder(renderer Renderer, table, value string) *SelectBu
 		builder.buildError = err
 		return builder
 	}
-	builder.required = append(builder.required, Equal(WorkspaceIDColumn, workspace))
+	builder.workspaceID = workspace
 	return builder
 }
 
