@@ -148,6 +148,16 @@ func TestSelectCTE(t *testing.T) {
 	})
 }
 
+func TestSelectBuildWithOffset(t *testing.T) {
+	sql, args, err := builder.NewSelectBuilder(postgresRenderer(t), "events").Columns("id").
+		Where(builder.And(builder.Equal("workspace_id", "workspace"), builder.Equal("status", "open"))).
+		BuildWithOffset(3)
+	assertSQL(t, sql, args, err, `SELECT "id" FROM "events" WHERE ("workspace_id" = $4 AND "status" = $5)`, []any{"workspace", "open"})
+	if _, _, err := builder.NewSelectBuilder(postgresRenderer(t), "events").Columns("id").BuildWithOffset(-1); err == nil {
+		t.Fatal("negative select argument offset accepted")
+	}
+}
+
 // -----------------------------------------------------------------------------
 // Derived tables (FROM subquery) and LATERAL
 // -----------------------------------------------------------------------------

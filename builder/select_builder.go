@@ -212,10 +212,20 @@ func (b *SelectBuilder) WithRecursive(name string, query *SelectBuilder, columns
 }
 
 func (b *SelectBuilder) Build() (string, []any, error) {
+	return b.BuildWithOffset(0)
+}
+
+// BuildWithOffset renders a structured SELECT that will be embedded after
+// offset arguments already owned by a larger prepared statement. This keeps
+// PostgreSQL placeholder numbering correct without exposing raw SQL.
+func (b *SelectBuilder) BuildWithOffset(offset int) (string, []any, error) {
 	if b == nil || b.renderer == nil {
 		return "", nil, fmt.Errorf("SQL select requires renderer")
 	}
-	context := &renderContext{renderer: b.renderer}
+	if offset < 0 {
+		return "", nil, fmt.Errorf("SQL select argument offset cannot be negative")
+	}
+	context := &renderContext{renderer: b.renderer, offset: offset}
 	statement, err := b.render(context, true)
 	if err != nil {
 		return "", nil, err
