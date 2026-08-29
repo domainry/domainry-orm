@@ -144,6 +144,28 @@ var systemColumns = []SchemaColumn{
 	DefineColumn("update_user_id", TextKeyType(255)),
 }
 
+// RecordSystemColumnNames returns the stable physical Record system-column
+// inventory in migration order.
+func RecordSystemColumnNames() []string {
+	names := make([]string, len(systemColumns))
+	for index, column := range systemColumns {
+		names[index] = column.name
+	}
+	return names
+}
+
+// RecordSystemColumn returns the canonical definition for one Record system
+// column. The returned value can be passed directly to AddColumnBuilder.
+func RecordSystemColumn(name string) (SchemaColumn, bool) {
+	name = strings.ToLower(strings.TrimSpace(name))
+	for _, column := range systemColumns {
+		if column.name == name {
+			return column, true
+		}
+	}
+	return SchemaColumn{}, false
+}
+
 type tableConstraint struct {
 	kind    string
 	columns []string
@@ -300,6 +322,42 @@ func renderColumnDefault(name dialect.Name, value string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("unsupported SQL column default %q", value)
+}
+
+type AddColumnBuilder struct {
+	renderer Renderer
+	table    string
+	column   SchemaColumn
+}
+
+func NewAddColumnBuilder(renderer Renderer, table string, column SchemaColumn) *AddColumnBuilder {
+	return &AddColumnBuilder{renderer: renderer, table: strings.TrimSpace(table), column: column}
+}
+
+func (b *AddColumnBuilder) Build() (string, []any, error) {
+	if b == nil || b.renderer == nil || b.table == "" || b.column.name == "" || b.column.typeOf == nil {
+		return "", nil, fmt.Errorf("SQL add column requires renderer, table, and column")
+	}
+	name, ok := b.renderer.(namedRenderer)
+	if !ok {
+		return "", nil, fmt.Errorf("SQL add column requires a named dialect renderer")
+	}
+	columnType, err := b.column.typeOf.renderColumnType(name.Name())
+	if err != nil {
+		return "", nil, err
+	}
+	definition := b.renderer.Identifier(b.column.name) + " " + columnType
+	if b.column.notNull {
+		definition += " NOT NULL"
+	}
+	if b.column.defaultValue != "" {
+		value, err := renderColumnDefault(name.Name(), b.column.defaultValue)
+		if err != nil {
+			return "", nil, fmt.Errorf("SQL table column %q: %w", b.column.name, err)
+		}
+		definition += " DEFAULT " + value
+	}
+	return "ALTER TABLE " + b.renderer.Table(b.table) + " ADD COLUMN " + definition, []any{}, nil
 }
 
 type CreateIndexBuilder struct {

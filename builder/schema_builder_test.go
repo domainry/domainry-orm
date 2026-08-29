@@ -132,6 +132,24 @@ func TestCreateTableBuilderCanDeclareInfrastructureSchema(t *testing.T) {
 	}
 }
 
+func TestRecordSystemColumnsDriveExistingTableMigration(t *testing.T) {
+	names := builder.RecordSystemColumnNames()
+	if len(names) != 8 || names[0] != "workspace_id" || names[len(names)-1] != "update_user_id" {
+		t.Fatalf("system columns=%v", names)
+	}
+	column, ok := builder.RecordSystemColumn("deleted")
+	if !ok {
+		t.Fatal("deleted system column missing")
+	}
+	statement, args, err := builder.NewAddColumnBuilder(schemaRenderer(t, dialect.Postgres), "customer", column).Build()
+	if err != nil || len(args) != 0 || statement != `ALTER TABLE "customer" ADD COLUMN "deleted" BOOLEAN NOT NULL DEFAULT FALSE` {
+		t.Fatalf("statement=%s args=%v err=%v", statement, args, err)
+	}
+	if _, ok := builder.RecordSystemColumn("unknown"); ok {
+		t.Fatal("unknown system column accepted")
+	}
+}
+
 func TestCreateIndexBuilderKeepsDialectCapabilityExplicit(t *testing.T) {
 	statement, _, err := builder.NewCreateIndexBuilder(schemaRenderer(t, dialect.Postgres), "idx_agent_claim", "agent_runs").
 		Columns("workspace_id", "updated_at").IfNotExists().Build()
