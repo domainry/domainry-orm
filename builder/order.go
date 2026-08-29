@@ -46,7 +46,7 @@ func (o Order) render(context *renderContext) (string, error) {
 	if o.nulls == nullsDefault {
 		return term, nil
 	}
-	if context.dialect() == dialect.MySQL {
+	if name, _ := context.dialect(); name == dialect.MySQL {
 		// MySQL sorts NULLs first for ASC and last for DESC by default. Emulate
 		// explicit placement with a leading ISNULL key.
 		flag := "ISNULL(" + operand + ")"

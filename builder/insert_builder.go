@@ -127,7 +127,8 @@ func (b *InsertBuilder) Build() (string, []any, error) {
 		statement += clause
 	}
 	if len(b.duplicate) > 0 {
-		if b.renderer.Name() != dialect.MySQL {
+		named, ok := b.renderer.(namedRenderer)
+		if !ok || named.Name() != dialect.MySQL {
 			return "", nil, fmt.Errorf("SQL ON DUPLICATE KEY UPDATE is only supported on MySQL")
 		}
 		assignments, err := renderAssignments(context, b.duplicate)

@@ -165,7 +165,7 @@ func (p iLikePredicate) renderPredicate(context *renderContext) (string, error) 
 
 	// PostgreSQL has native ILIKE. MySQL/SQLite emulate case-insensitivity by
 	// lowering both sides.
-	if context.dialect() == dialect.Postgres {
+	if name, _ := context.dialect(); name == dialect.Postgres {
 		operator := " ILIKE "
 		if p.not {
 			operator = " NOT ILIKE "

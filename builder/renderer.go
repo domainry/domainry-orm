@@ -4,13 +4,16 @@ import "github.com/domainry/domainry-orm/dialect"
 
 // Renderer is the portable SQL surface required by the builders. A bound
 // dialect renderer owns identifier quoting, placeholder syntax, and physical
-// table qualification. Name reports the active dialect so builders can emit
-// dialect-specific syntax (row locking, ILIKE, upsert, NULLS ordering, ...).
+// table qualification. Dialect identity is an optional capability so existing
+// host renderers remain source-compatible with the portable builder surface.
 type Renderer interface {
-	Name() dialect.Name
 	Identifier(string) string
 	Table(string) string
 	Placeholder(int) string
+}
+
+type namedRenderer interface {
+	Name() dialect.Name
 }
 
 type renderContext struct {
@@ -23,4 +26,10 @@ func (c *renderContext) argument(value any) string {
 	return c.renderer.Placeholder(len(c.args))
 }
 
-func (c *renderContext) dialect() dialect.Name { return c.renderer.Name() }
+func (c *renderContext) dialect() (dialect.Name, bool) {
+	renderer, ok := c.renderer.(namedRenderer)
+	if !ok {
+		return "", false
+	}
+	return renderer.Name(), true
+}
