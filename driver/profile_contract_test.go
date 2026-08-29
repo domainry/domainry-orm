@@ -33,7 +33,7 @@ func TestProfilesOwnEngineSpecificUpsert(t *testing.T) {
 }
 
 func TestProfilesOwnLockCapabilitiesAndErrorClassification(t *testing.T) {
-	if _, err := sqlite.NewProfile().ApplyClaimLock(nil, true); !errors.Is(err, ormdriver.ErrRowLockUnsupported) {
+	if _, err := sqlite.NewProfile().ApplyClaimLock(nil, true); !errors.Is(err, ormdriver.ErrSkipLockedUnsupported) {
 		t.Fatalf("sqlite lock=%v", err)
 	}
 	if got := postgres.NewProfile().ClassifyError(&pgconn.PgError{Code: "40001"}); got != ormdriver.ErrorSerialization {

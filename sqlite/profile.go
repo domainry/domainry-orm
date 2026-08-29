@@ -24,8 +24,11 @@ func (Profile) ApplyUpsert(value *builder.InsertBuilder, keys []string, assignme
 func (Profile) ApplyReturning(value *builder.InsertBuilder, columns ...string) (*builder.InsertBuilder, error) {
 	return value.Returning(columns...), nil
 }
-func (Profile) ApplyClaimLock(*builder.SelectBuilder, bool) (*builder.SelectBuilder, error) {
-	return nil, ormdriver.ErrRowLockUnsupported
+func (Profile) ApplyClaimLock(value *builder.SelectBuilder, skipLocked bool) (*builder.SelectBuilder, error) {
+	if skipLocked {
+		return nil, ormdriver.ErrSkipLockedUnsupported
+	}
+	return value, nil
 }
 func (Profile) ApplyCreateIndex(value *builder.CreateIndexBuilder) *builder.CreateIndexBuilder {
 	return value.IfNotExists()
