@@ -125,6 +125,13 @@ func TestRenameColumnBuilderUsesQualifiedPreparedIdentifiers(t *testing.T) {
 	}
 }
 
+func TestDropColumnBuilderUsesQualifiedIdentifiers(t *testing.T) {
+	statement, args, err := builder.NewDropColumnBuilder(schemaRenderer(t, dialect.Postgres), "records", "create_user_id").Build()
+	if err != nil || len(args) != 0 || !strings.Contains(statement, `DROP COLUMN "create_user_id"`) {
+		t.Fatalf("drop statement=%q args=%v err=%v", statement, args, err)
+	}
+}
+
 func TestCreateTableBuilderCanDeclareInfrastructureSchema(t *testing.T) {
 	statement, _, err := builder.NewCreateTableBuilder(schemaRenderer(t, dialect.SQLite), "agent_task_runs").
 		WithoutSystemColumns().Columns(

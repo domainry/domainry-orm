@@ -367,6 +367,23 @@ type RenameColumnBuilder struct {
 	to       string
 }
 
+type DropColumnBuilder struct {
+	renderer Renderer
+	table    string
+	column   string
+}
+
+func NewDropColumnBuilder(renderer Renderer, table, column string) *DropColumnBuilder {
+	return &DropColumnBuilder{renderer: renderer, table: strings.TrimSpace(table), column: strings.TrimSpace(column)}
+}
+
+func (b *DropColumnBuilder) Build() (string, []any, error) {
+	if b == nil || b.renderer == nil || b.table == "" || b.column == "" {
+		return "", nil, fmt.Errorf("SQL drop column requires renderer, table, and column")
+	}
+	return "ALTER TABLE " + b.renderer.Table(b.table) + " DROP COLUMN " + b.renderer.Identifier(b.column), []any{}, nil
+}
+
 func NewRenameColumnBuilder(renderer Renderer, table, from, to string) *RenameColumnBuilder {
 	return &RenameColumnBuilder{
 		renderer: renderer,
