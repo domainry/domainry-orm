@@ -2,8 +2,10 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-orm/dialect"
@@ -52,4 +54,45 @@ func (Profile) ClassifyError(err error) ormdriver.ErrorKind {
 	default:
 		return ormdriver.ErrorUnknown
 	}
+}
+
+type immediateTransaction struct{ connection *sql.Conn }
+
+func (Profile) BeginWrite(ctx context.Context, database *sql.DB) (ormdriver.Transaction, error) {
+	connection, err := database.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := connection.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		_ = connection.Close()
+		return nil, err
+	}
+	return &immediateTransaction{connection: connection}, nil
+}
+func (t *immediateTransaction) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	return t.connection.ExecContext(ctx, query, args...)
+}
+func (t *immediateTransaction) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return t.connection.QueryContext(ctx, query, args...)
+}
+func (t *immediateTransaction) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return t.connection.QueryRowContext(ctx, query, args...)
+}
+func (t *immediateTransaction) Commit(ctx context.Context) error {
+	_, err := t.connection.ExecContext(ctx, "COMMIT")
+	closeErr := t.connection.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
+}
+func (t *immediateTransaction) Rollback(ctx context.Context) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_, err := t.connection.ExecContext(cleanupCtx, "ROLLBACK")
+	closeErr := t.connection.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
 }

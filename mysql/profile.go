@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -63,4 +64,7 @@ func (Profile) ClassifyError(err error) ormdriver.ErrorKind {
 	default:
 		return ormdriver.ErrorUnknown
 	}
+}
+func (Profile) BeginWrite(ctx context.Context, database *sql.DB) (ormdriver.Transaction, error) {
+	return ormdriver.BeginSerializable(ctx, database)
 }

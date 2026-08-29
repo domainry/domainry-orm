@@ -4,10 +4,13 @@
 package driver
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 
 	"github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-orm/dialect"
+	"github.com/domainry/domainry-orm/sqlhost"
 )
 
 type ErrorKind string
@@ -45,7 +48,27 @@ type Profile interface {
 	ApplyCreateIndex(*builder.CreateIndexBuilder) *builder.CreateIndexBuilder
 	IsCreateIndexAlreadyExists(error) bool
 	ClassifyError(error) ErrorKind
+	BeginWrite(context.Context, *sql.DB) (Transaction, error)
 }
+
+type Transaction interface {
+	sqlhost.DBTX
+	Commit(context.Context) error
+	Rollback(context.Context) error
+}
+
+type StandardTransaction struct{ *sql.Tx }
+
+func BeginSerializable(ctx context.Context, database *sql.DB) (Transaction, error) {
+	value, err := database.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return nil, err
+	}
+	return StandardTransaction{Tx: value}, nil
+}
+
+func (t StandardTransaction) Commit(context.Context) error   { return t.Tx.Commit() }
+func (t StandardTransaction) Rollback(context.Context) error { return t.Tx.Rollback() }
 
 var (
 	ErrReturningUnsupported  = errors.New("SQL profile does not support RETURNING")
