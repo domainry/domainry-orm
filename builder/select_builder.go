@@ -34,6 +34,9 @@ type SelectBuilder struct {
 	distinct      bool
 	locking       string
 	combinations  []combination
+	required      []Predicate
+	workspaceMode bool
+	buildError    error
 }
 
 type cte struct {
@@ -108,8 +111,27 @@ func (b *SelectBuilder) OrderBy(orders ...Order) *SelectBuilder {
 	b.orders = append([]Order(nil), orders...)
 	return b
 }
-func (b *SelectBuilder) Limit(limit int) *SelectBuilder   { b.limit = limit; return b }
-func (b *SelectBuilder) Offset(offset int) *SelectBuilder { b.offset = offset; return b }
+func (b *SelectBuilder) Limit(limit int) *SelectBuilder { b.limit = limit; return b }
+func (b *SelectBuilder) Offset(offset int) *SelectBuilder {
+	b.offset = offset
+	if b.workspaceMode && offset > 0 {
+		b.buildError = fmt.Errorf("SQL workspace pagination requires an ID cursor; OFFSET is not allowed")
+	}
+	return b
+}
+
+// AfterID applies stable ascending keyset pagination. Empty cursors fail the
+// build so callers cannot silently fall back to an unbounded/deep OFFSET scan.
+func (b *SelectBuilder) AfterID(id string) *SelectBuilder {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		b.buildError = fmt.Errorf("SQL keyset pagination requires an ID cursor")
+		return b
+	}
+	b.required = append(b.required, GreaterThan("id", id))
+	b.OrderBy(Ascending("id"))
+	return b
+}
 
 // Lateral marks a subquery FROM source as LATERAL.
 func (b *SelectBuilder) Lateral() *SelectBuilder { b.fromLateral = true; return b }
@@ -197,6 +219,9 @@ func (b *SelectBuilder) Build() (string, []any, error) {
 // caller is embedding the query (subquery, CTE, set operation) and the leading
 // WITH clause is suppressed.
 func (b *SelectBuilder) render(context *renderContext, topLevel bool) (string, error) {
+	if b.buildError != nil {
+		return "", b.buildError
+	}
 	if b.table == "" && b.fromSubquery == nil {
 		return "", fmt.Errorf("SQL select requires a table or subquery source")
 	}
@@ -252,8 +277,16 @@ func (b *SelectBuilder) render(context *renderContext, topLevel bool) (string, e
 		}
 		statement += " " + rendered
 	}
-	if b.predicate != nil {
-		where, err := b.predicate.renderPredicate(context)
+	predicate := b.predicate
+	if len(b.required) > 0 {
+		parts := append([]Predicate(nil), b.required...)
+		if predicate != nil {
+			parts = append(parts, predicate)
+		}
+		predicate = And(parts...)
+	}
+	if predicate != nil {
+		where, err := predicate.renderPredicate(context)
 		if err != nil {
 			return "", err
 		}

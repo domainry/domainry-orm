@@ -6,10 +6,12 @@ import (
 )
 
 type DeleteBuilder struct {
-	renderer  Renderer
-	table     string
-	predicate Predicate
-	returning []string
+	renderer   Renderer
+	table      string
+	predicate  Predicate
+	returning  []string
+	required   []Predicate
+	buildError error
 }
 
 func NewDeleteBuilder(renderer Renderer, table string) *DeleteBuilder {
@@ -24,14 +26,25 @@ func (b *DeleteBuilder) Returning(columns ...string) *DeleteBuilder {
 }
 
 func (b *DeleteBuilder) Build() (string, []any, error) {
+	if b != nil && b.buildError != nil {
+		return "", nil, b.buildError
+	}
 	if b == nil || b.renderer == nil || b.table == "" {
 		return "", nil, fmt.Errorf("SQL delete requires renderer and table")
 	}
-	if b.predicate == nil {
+	predicate := b.predicate
+	if len(b.required) > 0 {
+		parts := append([]Predicate(nil), b.required...)
+		if predicate != nil {
+			parts = append(parts, predicate)
+		}
+		predicate = And(parts...)
+	}
+	if predicate == nil {
 		return "", nil, fmt.Errorf("SQL delete requires an explicit predicate")
 	}
 	context := &renderContext{renderer: b.renderer}
-	where, err := b.predicate.renderPredicate(context)
+	where, err := predicate.renderPredicate(context)
 	if err != nil {
 		return "", nil, err
 	}

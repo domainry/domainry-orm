@@ -3,6 +3,8 @@ package builder
 import (
 	"fmt"
 	"strings"
+
+	"github.com/domainry/domainry-orm/dialect"
 )
 
 type Expression interface {
@@ -60,6 +62,33 @@ func Value(value any) Expression { return valueExpression{value: value} }
 
 func (e valueExpression) renderExpression(context *renderContext) (string, error) {
 	return context.argument(e.value), nil
+}
+
+type insertedValueExpression struct{ column string }
+
+// InsertedValue references the incoming row inside an upsert update clause.
+// MySQL renders VALUES(column); PostgreSQL and SQLite render excluded.column.
+// The column remains a validated identifier and never accepts raw SQL.
+func InsertedValue(column string) Expression {
+	return insertedValueExpression{column: strings.TrimSpace(column)}
+}
+
+func (e insertedValueExpression) renderExpression(context *renderContext) (string, error) {
+	if e.column == "" {
+		return "", fmt.Errorf("SQL inserted value column is required")
+	}
+	name, ok := context.dialect()
+	if !ok {
+		return "", fmt.Errorf("SQL inserted value requires a named dialect renderer")
+	}
+	switch name {
+	case dialect.MySQL:
+		return "VALUES(" + context.renderer.Identifier(e.column) + ")", nil
+	case dialect.Postgres, dialect.SQLite:
+		return context.renderer.Identifier("excluded") + "." + context.renderer.Identifier(e.column), nil
+	default:
+		return "", fmt.Errorf("SQL inserted value does not support dialect %q", name)
+	}
 }
 
 type arithmeticExpression struct {

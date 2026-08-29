@@ -23,14 +23,17 @@ type onConflict struct {
 }
 
 type InsertBuilder struct {
-	renderer  Renderer
-	table     string
-	columns   []string
-	rows      [][]any
-	source    *SelectBuilder
-	returning []string
-	conflict  *onConflict
-	duplicate []Assignment // MySQL ON DUPLICATE KEY UPDATE
+	renderer      Renderer
+	table         string
+	columns       []string
+	rows          [][]any
+	source        *SelectBuilder
+	returning     []string
+	conflict      *onConflict
+	duplicate     []Assignment // MySQL ON DUPLICATE KEY UPDATE
+	workspaceID   string
+	workspaceMode bool
+	buildError    error
 }
 
 func NewInsertBuilder(renderer Renderer, table string) *InsertBuilder {
@@ -82,6 +85,9 @@ func (b *InsertBuilder) OnDuplicateKeyUpdate(assignments ...Assignment) *InsertB
 }
 
 func (b *InsertBuilder) Build() (string, []any, error) {
+	if b != nil && b.buildError != nil {
+		return "", nil, b.buildError
+	}
 	if b == nil || b.renderer == nil || b.table == "" || len(b.columns) == 0 {
 		return "", nil, fmt.Errorf("SQL insert requires renderer, table, and columns")
 	}
@@ -91,9 +97,30 @@ func (b *InsertBuilder) Build() (string, []any, error) {
 	if len(b.rows) > 0 && b.source != nil {
 		return "", nil, fmt.Errorf("SQL insert cannot combine values and a source query")
 	}
+	if b.workspaceMode && b.source != nil {
+		return "", nil, fmt.Errorf("SQL workspace insert does not support a SELECT source")
+	}
+	if b.workspaceMode {
+		for _, column := range b.columns {
+			if strings.EqualFold(strings.TrimSpace(column), WorkspaceIDColumn) {
+				return "", nil, fmt.Errorf("SQL workspace insert owns the workspace_id column")
+			}
+		}
+	}
+	columnNames := append([]string(nil), b.columns...)
+	rowsData := make([][]any, len(b.rows))
+	for index := range b.rows {
+		rowsData[index] = append([]any(nil), b.rows[index]...)
+	}
+	if b.workspaceMode {
+		columnNames = append([]string{"workspace_id"}, columnNames...)
+		for index := range rowsData {
+			rowsData[index] = append([]any{b.workspaceID}, rowsData[index]...)
+		}
+	}
 	context := &renderContext{renderer: b.renderer}
-	columns := make([]string, len(b.columns))
-	for index, column := range b.columns {
+	columns := make([]string, len(columnNames))
+	for index, column := range columnNames {
 		columns[index] = b.renderer.Identifier(column)
 	}
 	statement := "INSERT INTO " + b.renderer.Table(b.table) + " (" + strings.Join(columns, ", ") + ") "
@@ -105,10 +132,10 @@ func (b *InsertBuilder) Build() (string, []any, error) {
 		}
 		statement += rendered
 	} else {
-		rows := make([]string, len(b.rows))
-		for rowIndex, row := range b.rows {
-			if len(row) != len(b.columns) {
-				return "", nil, fmt.Errorf("SQL insert row %d has %d values for %d columns", rowIndex, len(row), len(b.columns))
+		rows := make([]string, len(rowsData))
+		for rowIndex, row := range rowsData {
+			if len(row) != len(columnNames) {
+				return "", nil, fmt.Errorf("SQL insert row %d has %d values for %d columns", rowIndex, len(row), len(columnNames))
 			}
 			placeholders := make([]string, len(row))
 			for index, value := range row {

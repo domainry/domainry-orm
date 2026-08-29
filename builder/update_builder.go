@@ -13,6 +13,8 @@ type UpdateBuilder struct {
 	assignments []Assignment
 	predicate   Predicate
 	returning   []string
+	required    []Predicate
+	buildError  error
 }
 
 func NewUpdateBuilder(renderer Renderer, table string) *UpdateBuilder {
@@ -34,10 +36,21 @@ func (b *UpdateBuilder) Returning(columns ...string) *UpdateBuilder {
 }
 
 func (b *UpdateBuilder) Build() (string, []any, error) {
+	if b != nil && b.buildError != nil {
+		return "", nil, b.buildError
+	}
 	if b == nil || b.renderer == nil || b.table == "" || len(b.assignments) == 0 {
 		return "", nil, fmt.Errorf("SQL update requires renderer, table, and assignments")
 	}
-	if b.predicate == nil {
+	predicate := b.predicate
+	if len(b.required) > 0 {
+		parts := append([]Predicate(nil), b.required...)
+		if predicate != nil {
+			parts = append(parts, predicate)
+		}
+		predicate = And(parts...)
+	}
+	if predicate == nil {
 		return "", nil, fmt.Errorf("SQL update requires an explicit predicate")
 	}
 	context := &renderContext{renderer: b.renderer}
@@ -45,7 +58,7 @@ func (b *UpdateBuilder) Build() (string, []any, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	where, err := b.predicate.renderPredicate(context)
+	where, err := predicate.renderPredicate(context)
 	if err != nil {
 		return "", nil, err
 	}
