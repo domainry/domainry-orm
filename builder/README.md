@@ -15,7 +15,7 @@ even when the schema owner supplies no business columns:
 - `workspace_id`, `id`
 - `created_at`, `updated_at`
 - `deleted`, `ext_info`
-- `create_user_id`, `update_user_id`
+- `create_by`, `update_by`
 
 Schema owners may still mention a system column explicitly when adopting a
 pre-existing physical contract; the builder never emits it twice. New schemas

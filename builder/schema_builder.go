@@ -140,8 +140,8 @@ var systemColumns = []SchemaColumn{
 	DefineColumn("updated_at", TimestampType()).NotNull().Default("current_timestamp"),
 	DefineColumn("deleted", BooleanType()).NotNull().Default("false"),
 	DefineColumn("ext_info", JSONType()).NotNull().Default("empty_json"),
-	DefineColumn("create_user_id", TextKeyType(255)),
-	DefineColumn("update_user_id", TextKeyType(255)),
+	DefineColumn("create_by", TextKeyType(255)),
+	DefineColumn("update_by", TextKeyType(255)),
 }
 
 // RecordSystemColumnNames returns the stable physical Record system-column

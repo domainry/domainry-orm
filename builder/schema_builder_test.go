@@ -32,7 +32,7 @@ func TestCreateTableBuilderRendersPortableKeyTypesAndConstraints(t *testing.T) {
 		if name != dialect.MySQL && strings.Contains(statement, "VARCHAR") {
 			t.Fatalf("dialect=%s leaked mysql key type: %s", name, statement)
 		}
-		for _, required := range []string{"CREATE TABLE IF NOT EXISTS", "PRIMARY KEY", "UNIQUE", "payload_json", "workspace_id", "id", "created_at", "updated_at", "deleted", "ext_info", "create_user_id", "update_user_id"} {
+		for _, required := range []string{"CREATE TABLE IF NOT EXISTS", "PRIMARY KEY", "UNIQUE", "payload_json", "workspace_id", "id", "created_at", "updated_at", "deleted", "ext_info", "create_by", "update_by"} {
 			if !strings.Contains(statement, required) {
 				t.Fatalf("dialect=%s missing %q: %s", name, required, statement)
 			}
@@ -71,7 +71,7 @@ func TestCreateTableBuilderAddsSystemColumnsWithPortableTypesAndDefaults(t *test
 		if err != nil {
 			t.Fatalf("dialect=%s err=%v", name, err)
 		}
-		for _, required := range []string{"DECIMAL(19,4)", "workspace_id", "id", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP", "deleted", "ext_info", "create_user_id", "update_user_id"} {
+		for _, required := range []string{"DECIMAL(19,4)", "workspace_id", "id", "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP", "deleted", "ext_info", "create_by", "update_by"} {
 			if !strings.Contains(statement, required) {
 				t.Fatalf("dialect=%s missing %q: %s", name, required, statement)
 			}
@@ -102,7 +102,7 @@ func TestCreateTableBuilderAddsSystemColumnsWithPortableTypesAndDefaults(t *test
 func TestCreateTableBuilderAcceptsSystemOnlyTableAndRejectsInvalidDecimal(t *testing.T) {
 	renderer := schemaRenderer(t, dialect.SQLite)
 	statement, _, err := builder.NewCreateTableBuilder(renderer, "system_only").Build()
-	if err != nil || !strings.Contains(statement, `"update_user_id"`) {
+	if err != nil || !strings.Contains(statement, `"update_by"`) {
 		t.Fatalf("system-only statement=%s err=%v", statement, err)
 	}
 	if _, _, err := builder.NewCreateTableBuilder(renderer, "bad_decimal").Columns(
@@ -122,7 +122,7 @@ func TestCreateTableBuilderCanDeclareInfrastructureSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{`"id"`, `"deleted"`, `"ext_info"`, `"create_user_id"`, `"update_user_id"`} {
+	for _, forbidden := range []string{`"id"`, `"deleted"`, `"ext_info"`, `"create_by"`, `"update_by"`} {
 		if strings.Contains(statement, forbidden) {
 			t.Fatalf("infrastructure schema contains %s: %s", forbidden, statement)
 		}
@@ -134,7 +134,7 @@ func TestCreateTableBuilderCanDeclareInfrastructureSchema(t *testing.T) {
 
 func TestRecordSystemColumnsDriveExistingTableMigration(t *testing.T) {
 	names := builder.RecordSystemColumnNames()
-	if len(names) != 8 || names[0] != "workspace_id" || names[len(names)-1] != "update_user_id" {
+	if len(names) != 8 || names[0] != "workspace_id" || names[len(names)-1] != "update_by" {
 		t.Fatalf("system columns=%v", names)
 	}
 	column, ok := builder.RecordSystemColumn("deleted")
