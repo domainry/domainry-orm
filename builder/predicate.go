@@ -50,8 +50,38 @@ type expressionComparisonPredicate struct {
 func EqualExpressions(left, right Expression) Predicate {
 	return expressionComparisonPredicate{left: left, operator: "=", right: right}
 }
+func NotEqualExpressions(left, right Expression) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "<>", right: right}
+}
+func LessThanExpressions(left, right Expression) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "<", right: right}
+}
+func LessThanOrEqualExpressions(left, right Expression) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "<=", right: right}
+}
+func GreaterThanExpressions(left, right Expression) Predicate {
+	return expressionComparisonPredicate{left: left, operator: ">", right: right}
+}
+func GreaterThanOrEqualExpressions(left, right Expression) Predicate {
+	return expressionComparisonPredicate{left: left, operator: ">=", right: right}
+}
 func EqualValue(left Expression, value any) Predicate {
 	return expressionComparisonPredicate{left: left, operator: "=", right: Value(value)}
+}
+func NotEqualValue(left Expression, value any) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "<>", right: Value(value)}
+}
+func LessThanValue(left Expression, value any) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "<", right: Value(value)}
+}
+func LessThanOrEqualValue(left Expression, value any) Predicate {
+	return expressionComparisonPredicate{left: left, operator: "<=", right: Value(value)}
+}
+func GreaterThanExpression(left Expression, value any) Predicate {
+	return expressionComparisonPredicate{left: left, operator: ">", right: Value(value)}
+}
+func GreaterThanOrEqualValue(left Expression, value any) Predicate {
+	return expressionComparisonPredicate{left: left, operator: ">=", right: Value(value)}
 }
 
 func (p expressionComparisonPredicate) renderPredicate(context *renderContext) (string, error) {

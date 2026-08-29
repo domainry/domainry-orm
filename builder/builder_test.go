@@ -2,6 +2,7 @@ package builder_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/domainry/domainry-orm/builder"
@@ -43,6 +44,29 @@ func TestBuildersRenderAcrossSupportedDialects(t *testing.T) {
 				t.Fatalf("delete=%q args=%v err=%v", deleteSQL, deleteArgs, err)
 			}
 		})
+	}
+}
+
+func TestSelectBuilderAggregateCaseAndLower(t *testing.T) {
+	for _, name := range []string{"sqlite", "mysql", "postgres"} {
+		renderer, err := dialect.ParseRenderer(name, "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		statement, args, err := builder.NewSelectBuilder(renderer, "items").Projections(
+			builder.Project(builder.CountAll()),
+			builder.Project(builder.Coalesce(builder.Sum(builder.CaseWhen(builder.Or(builder.Equal("state", "open"), builder.Equal("alert", "firing")), 1).Else(0)), builder.Value(0))),
+			builder.Project(builder.Lower(builder.Column("search_text"))),
+		).Build()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(statement, "COUNT(*)") || !strings.Contains(statement, "CASE WHEN") || !strings.Contains(statement, "LOWER(") {
+			t.Fatalf("%s statement=%s", name, statement)
+		}
+		if len(args) != 5 {
+			t.Fatalf("%s args=%v", name, args)
+		}
 	}
 }
 
