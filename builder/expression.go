@@ -143,6 +143,42 @@ func Lower(expression Expression) Expression {
 	return functionExpression{name: "LOWER", arguments: []Expression{expression}}
 }
 
+type concatExpression struct{ expressions []Expression }
+
+// Concat joins text expressions using the active dialect's native syntax.
+// Values must be supplied with Value so they remain bound parameters.
+func Concat(expressions ...Expression) Expression {
+	return concatExpression{expressions: append([]Expression(nil), expressions...)}
+}
+
+func (e concatExpression) renderExpression(context *renderContext) (string, error) {
+	if len(e.expressions) < 2 {
+		return "", fmt.Errorf("SQL concat expression requires at least two operands")
+	}
+	rendered := make([]string, len(e.expressions))
+	for index, expression := range e.expressions {
+		if expression == nil {
+			return "", fmt.Errorf("SQL concat expression operand is required")
+		}
+		value, err := expression.renderExpression(context)
+		if err != nil {
+			return "", err
+		}
+		rendered[index] = value
+	}
+	name, ok := context.dialect()
+	if !ok {
+		return "", fmt.Errorf("SQL concat expression requires a named dialect renderer")
+	}
+	if name == dialect.MySQL {
+		return "CONCAT(" + strings.Join(rendered, ", ") + ")", nil
+	}
+	if name == dialect.Postgres || name == dialect.SQLite {
+		return "(" + strings.Join(rendered, " || ") + ")", nil
+	}
+	return "", fmt.Errorf("SQL concat expression does not support dialect %q", name)
+}
+
 // CountAll renders COUNT(*).
 func CountAll() Expression { return functionExpression{name: "COUNT", arguments: []Expression{Star()}} }
 

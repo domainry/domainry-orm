@@ -60,7 +60,9 @@ func (b *InsertBuilder) Returning(columns ...string) *InsertBuilder {
 	return b
 }
 
-// OnConflictDoNothing emits PostgreSQL/SQLite ON CONFLICT [ (targets) ] DO NOTHING.
+// OnConflictDoNothing skips duplicate rows across supported dialects. MySQL
+// uses a no-op ON DUPLICATE KEY UPDATE so unrelated insert errors are not
+// suppressed by INSERT IGNORE.
 func (b *InsertBuilder) OnConflictDoNothing(targets ...string) *InsertBuilder {
 	b.conflict = &onConflict{targets: targets, action: conflictDoNothing}
 	return b
@@ -171,6 +173,16 @@ func (b *InsertBuilder) Build() (string, []any, error) {
 }
 
 func (b *InsertBuilder) renderConflict(context *renderContext) (string, error) {
+	if named, ok := b.renderer.(namedRenderer); ok && named.Name() == dialect.MySQL {
+		if b.conflict.action != conflictDoNothing {
+			return "", fmt.Errorf("SQL ON CONFLICT DO UPDATE is not supported on MySQL; use ON DUPLICATE KEY UPDATE")
+		}
+		if len(b.conflict.targets) == 0 {
+			return "", fmt.Errorf("SQL MySQL conflict do nothing requires a target column")
+		}
+		target := b.renderer.Identifier(b.conflict.targets[0])
+		return " ON DUPLICATE KEY UPDATE " + target + " = " + target, nil
+	}
 	clause := " ON CONFLICT"
 	if len(b.conflict.targets) > 0 {
 		quoted := make([]string, len(b.conflict.targets))
