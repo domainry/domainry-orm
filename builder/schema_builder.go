@@ -278,9 +278,6 @@ func (b *CreateTableBuilder) Build() (string, []any, error) {
 			return "", nil, err
 		}
 		definition := b.renderer.Identifier(column.name) + " " + columnType
-		if column.notNull {
-			definition += " NOT NULL"
-		}
 		if column.characterSet != "" || column.collation != "" {
 			if name.Name() != dialect.MySQL {
 				return "", nil, fmt.Errorf("SQL table column %q character set and collation require MySQL", column.name)
@@ -297,6 +294,9 @@ func (b *CreateTableBuilder) Build() (string, []any, error) {
 				}
 				definition += " COLLATE " + column.collation
 			}
+		}
+		if column.notNull {
+			definition += " NOT NULL"
 		}
 		if column.defaultKeyword != "" {
 			value, err := renderColumnDefault(name.Name(), column.defaultKeyword)
@@ -442,9 +442,6 @@ func (b *AddColumnBuilder) Build() (string, []any, error) {
 		return "", nil, err
 	}
 	definition := b.renderer.Identifier(b.column.name) + " " + columnType
-	if b.column.notNull {
-		definition += " NOT NULL"
-	}
 	if b.column.characterSet != "" || b.column.collation != "" {
 		if name.Name() != dialect.MySQL {
 			return "", nil, fmt.Errorf("SQL table column %q character set and collation require MySQL", b.column.name)
@@ -461,6 +458,9 @@ func (b *AddColumnBuilder) Build() (string, []any, error) {
 			}
 			definition += " COLLATE " + b.column.collation
 		}
+	}
+	if b.column.notNull {
+		definition += " NOT NULL"
 	}
 	if b.column.defaultKeyword != "" {
 		value, err := renderColumnDefault(name.Name(), b.column.defaultKeyword)
