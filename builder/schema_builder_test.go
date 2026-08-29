@@ -132,6 +132,29 @@ func TestDropColumnBuilderUsesQualifiedIdentifiers(t *testing.T) {
 	}
 }
 
+func TestCreateTableBuilderRendersTypedDefaultsAndProfileColumnAttributes(t *testing.T) {
+	mysql := schemaRenderer(t, dialect.MySQL)
+	statement, _, err := builder.NewCreateTableBuilder(mysql, "profiled").WithoutSystemColumns().Columns(
+		builder.DefineColumn("payload", builder.LongTextType()).NotNull().DefaultValue("owner's payload"),
+		builder.DefineColumn("state", builder.TextKeyType(191)).CharacterSet("ascii").Collation("ascii_bin").NotNull().DefaultValue("active"),
+		builder.DefineColumn("attempt", builder.IntegerType()).NotNull().DefaultValue(0),
+		builder.DefineColumn("enabled", builder.BooleanType()).NotNull().DefaultValue(true),
+	).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"LONGTEXT", "owner''s payload", "CHARACTER SET ascii COLLATE ascii_bin", "DEFAULT 'active'", "DEFAULT 0", "DEFAULT TRUE"} {
+		if !strings.Contains(statement, fragment) {
+			t.Fatalf("missing %q in %s", fragment, statement)
+		}
+	}
+	if _, _, err := builder.NewCreateTableBuilder(schemaRenderer(t, dialect.Postgres), "invalid_profile").WithoutSystemColumns().Columns(
+		builder.DefineColumn("state", builder.TextType()).Collation("ascii_bin"),
+	).Build(); err == nil {
+		t.Fatal("non-MySQL collation accepted")
+	}
+}
+
 func TestCreateTableBuilderCanDeclareInfrastructureSchema(t *testing.T) {
 	statement, _, err := builder.NewCreateTableBuilder(schemaRenderer(t, dialect.SQLite), "agent_task_runs").
 		WithoutSystemColumns().Columns(

@@ -21,6 +21,7 @@ type portableColumnType struct {
 }
 
 func TextType() ColumnType      { return portableColumnType{name: "TEXT"} }
+func LongTextType() ColumnType  { return portableColumnType{name: "LONGTEXT"} }
 func BigIntType() ColumnType    { return portableColumnType{name: "BIGINT"} }
 func IntegerType() ColumnType   { return portableColumnType{name: "INTEGER"} }
 func SmallIntType() ColumnType  { return portableColumnType{name: "SMALLINT"} }
@@ -76,6 +77,11 @@ func (t portableColumnType) renderColumnType(name dialect.Name) (string, error) 
 	switch t.name {
 	case "TEXT", "BIGINT", "INTEGER", "SMALLINT", "BOOLEAN", "REAL", "DATE", "TIME", "TIMESTAMP":
 		return t.name, nil
+	case "LONGTEXT":
+		if name == dialect.MySQL {
+			return "LONGTEXT", nil
+		}
+		return "TEXT", nil
 	case "DOUBLE":
 		if name == dialect.Postgres {
 			return "DOUBLE PRECISION", nil
@@ -111,10 +117,14 @@ func (t portableColumnType) renderColumnType(name dialect.Name) (string, error) 
 }
 
 type SchemaColumn struct {
-	name         string
-	typeOf       ColumnType
-	notNull      bool
-	defaultValue string
+	name              string
+	typeOf            ColumnType
+	notNull           bool
+	defaultKeyword    string
+	defaultLiteral    any
+	hasDefaultLiteral bool
+	characterSet      string
+	collation         string
 }
 
 func DefineColumn(name string, typeOf ColumnType) SchemaColumn {
@@ -129,7 +139,29 @@ func (c SchemaColumn) NotNull() SchemaColumn {
 // Default sets a portable, trusted SQL default. The accepted values are kept
 // deliberately closed so schema construction cannot become a raw-SQL escape.
 func (c SchemaColumn) Default(value string) SchemaColumn {
-	c.defaultValue = strings.TrimSpace(value)
+	c.defaultKeyword = strings.TrimSpace(value)
+	c.defaultLiteral, c.hasDefaultLiteral = nil, false
+	return c
+}
+
+// DefaultValue renders a typed DDL literal. Values are never interpreted as
+// SQL expressions, so schema owners do not need a raw-SQL escape hatch for
+// string, boolean, or numeric defaults.
+func (c SchemaColumn) DefaultValue(value any) SchemaColumn {
+	c.defaultKeyword = ""
+	c.defaultLiteral, c.hasDefaultLiteral = value, true
+	return c
+}
+
+// CharacterSet and Collation are identifier-only MySQL column attributes.
+// Other dialects reject them instead of silently changing physical semantics.
+func (c SchemaColumn) CharacterSet(value string) SchemaColumn {
+	c.characterSet = strings.TrimSpace(value)
+	return c
+}
+
+func (c SchemaColumn) Collation(value string) SchemaColumn {
+	c.collation = strings.TrimSpace(value)
 	return c
 }
 
@@ -249,8 +281,31 @@ func (b *CreateTableBuilder) Build() (string, []any, error) {
 		if column.notNull {
 			definition += " NOT NULL"
 		}
-		if column.defaultValue != "" {
-			value, err := renderColumnDefault(name.Name(), column.defaultValue)
+		if column.characterSet != "" || column.collation != "" {
+			if name.Name() != dialect.MySQL {
+				return "", nil, fmt.Errorf("SQL table column %q character set and collation require MySQL", column.name)
+			}
+			if column.characterSet != "" {
+				if !dialect.ValidIdentifier(column.characterSet) {
+					return "", nil, fmt.Errorf("SQL table column %q has invalid character set", column.name)
+				}
+				definition += " CHARACTER SET " + column.characterSet
+			}
+			if column.collation != "" {
+				if !dialect.ValidIdentifier(column.collation) {
+					return "", nil, fmt.Errorf("SQL table column %q has invalid collation", column.name)
+				}
+				definition += " COLLATE " + column.collation
+			}
+		}
+		if column.defaultKeyword != "" {
+			value, err := renderColumnDefault(name.Name(), column.defaultKeyword)
+			if err != nil {
+				return "", nil, fmt.Errorf("SQL table column %q: %w", column.name, err)
+			}
+			definition += " DEFAULT " + value
+		} else if column.hasDefaultLiteral {
+			value, err := renderColumnDefaultLiteral(name.Name(), column.defaultLiteral)
 			if err != nil {
 				return "", nil, fmt.Errorf("SQL table column %q: %w", column.name, err)
 			}
@@ -324,6 +379,46 @@ func renderColumnDefault(name dialect.Name, value string) (string, error) {
 	return "", fmt.Errorf("unsupported SQL column default %q", value)
 }
 
+func renderColumnDefaultLiteral(name dialect.Name, value any) (string, error) {
+	switch typed := value.(type) {
+	case string:
+		return "'" + strings.ReplaceAll(typed, "'", "''") + "'", nil
+	case bool:
+		if name == dialect.SQLite {
+			if typed {
+				return "1", nil
+			}
+			return "0", nil
+		}
+		if typed {
+			return "TRUE", nil
+		}
+		return "FALSE", nil
+	case int:
+		return strconv.Itoa(typed), nil
+	case int8:
+		return strconv.FormatInt(int64(typed), 10), nil
+	case int16:
+		return strconv.FormatInt(int64(typed), 10), nil
+	case int32:
+		return strconv.FormatInt(int64(typed), 10), nil
+	case int64:
+		return strconv.FormatInt(typed, 10), nil
+	case uint:
+		return strconv.FormatUint(uint64(typed), 10), nil
+	case uint8:
+		return strconv.FormatUint(uint64(typed), 10), nil
+	case uint16:
+		return strconv.FormatUint(uint64(typed), 10), nil
+	case uint32:
+		return strconv.FormatUint(uint64(typed), 10), nil
+	case uint64:
+		return strconv.FormatUint(typed, 10), nil
+	default:
+		return "", fmt.Errorf("unsupported SQL column default literal %T", value)
+	}
+}
+
 type AddColumnBuilder struct {
 	renderer Renderer
 	table    string
@@ -350,8 +445,31 @@ func (b *AddColumnBuilder) Build() (string, []any, error) {
 	if b.column.notNull {
 		definition += " NOT NULL"
 	}
-	if b.column.defaultValue != "" {
-		value, err := renderColumnDefault(name.Name(), b.column.defaultValue)
+	if b.column.characterSet != "" || b.column.collation != "" {
+		if name.Name() != dialect.MySQL {
+			return "", nil, fmt.Errorf("SQL table column %q character set and collation require MySQL", b.column.name)
+		}
+		if b.column.characterSet != "" {
+			if !dialect.ValidIdentifier(b.column.characterSet) {
+				return "", nil, fmt.Errorf("SQL table column %q has invalid character set", b.column.name)
+			}
+			definition += " CHARACTER SET " + b.column.characterSet
+		}
+		if b.column.collation != "" {
+			if !dialect.ValidIdentifier(b.column.collation) {
+				return "", nil, fmt.Errorf("SQL table column %q has invalid collation", b.column.name)
+			}
+			definition += " COLLATE " + b.column.collation
+		}
+	}
+	if b.column.defaultKeyword != "" {
+		value, err := renderColumnDefault(name.Name(), b.column.defaultKeyword)
+		if err != nil {
+			return "", nil, fmt.Errorf("SQL table column %q: %w", b.column.name, err)
+		}
+		definition += " DEFAULT " + value
+	} else if b.column.hasDefaultLiteral {
+		value, err := renderColumnDefaultLiteral(name.Name(), b.column.defaultLiteral)
 		if err != nil {
 			return "", nil, fmt.Errorf("SQL table column %q: %w", b.column.name, err)
 		}
