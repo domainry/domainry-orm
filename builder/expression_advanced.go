@@ -2,6 +2,7 @@ package builder
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -25,23 +26,15 @@ func Divide(left, right Expression) Expression {
 }
 
 // -----------------------------------------------------------------------------
-// Raw / Star
+// Star
 // -----------------------------------------------------------------------------
 
-type rawExpression struct{ sql string }
-
-// Raw emits a literal SQL fragment verbatim. The caller owns its correctness.
-func Raw(sql string) Expression { return rawExpression{sql: sql} }
-
-func (e rawExpression) renderExpression(_ *renderContext) (string, error) {
-	if strings.TrimSpace(e.sql) == "" {
-		return "", fmt.Errorf("SQL raw expression is required")
-	}
-	return e.sql, nil
-}
+type starExpression struct{}
 
 // Star renders "*" for use in projections such as Project(Star()).
-func Star() Expression { return rawExpression{sql: "*"} }
+func Star() Expression { return starExpression{} }
+
+func (starExpression) renderExpression(*renderContext) (string, error) { return "*", nil }
 
 // -----------------------------------------------------------------------------
 // CAST
@@ -57,7 +50,7 @@ func Cast(expression Expression, typ string) Expression {
 }
 
 func (e castExpression) renderExpression(context *renderContext) (string, error) {
-	if e.expression == nil || e.typ == "" {
+	if e.expression == nil || !safeCastType(e.typ) {
 		return "", fmt.Errorf("SQL cast requires an expression and type")
 	}
 	inner, err := e.expression.renderExpression(context)
@@ -65,6 +58,25 @@ func (e castExpression) renderExpression(context *renderContext) (string, error)
 		return "", err
 	}
 	return "CAST(" + inner + " AS " + e.typ + ")", nil
+}
+
+func safeCastType(value string) bool {
+	if value == "" {
+		return false
+	}
+	depth := 0
+	for _, character := range value {
+		switch {
+		case character >= 'a' && character <= 'z', character >= 'A' && character <= 'Z', character >= '0' && character <= '9', character == '_', character == ' ', character == ',':
+		case character == '(':
+			depth++
+		case character == ')' && depth > 0:
+			depth--
+		default:
+			return false
+		}
+	}
+	return depth == 0
 }
 
 // -----------------------------------------------------------------------------
@@ -145,10 +157,15 @@ func (w WindowSpec) render(context *renderContext) (string, error) {
 		parts = append(parts, "ORDER BY "+strings.Join(orders, ", "))
 	}
 	if w.frame != "" {
+		if !safeWindowFrame.MatchString(strings.ToUpper(w.frame)) {
+			return "", fmt.Errorf("SQL window frame is invalid")
+		}
 		parts = append(parts, w.frame)
 	}
 	return strings.Join(parts, " "), nil
 }
+
+var safeWindowFrame = regexp.MustCompile(`^(ROWS|RANGE|GROUPS) (BETWEEN (UNBOUNDED PRECEDING|[0-9]+ PRECEDING|CURRENT ROW|[0-9]+ FOLLOWING|UNBOUNDED FOLLOWING) AND (UNBOUNDED PRECEDING|[0-9]+ PRECEDING|CURRENT ROW|[0-9]+ FOLLOWING|UNBOUNDED FOLLOWING)|(UNBOUNDED PRECEDING|[0-9]+ PRECEDING|CURRENT ROW|[0-9]+ FOLLOWING|UNBOUNDED FOLLOWING))$`)
 
 type windowExpression struct {
 	function Expression

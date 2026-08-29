@@ -192,7 +192,7 @@ func caseResult(context *renderContext, value any) (string, error) {
 }
 
 func (e functionExpression) renderExpression(context *renderContext) (string, error) {
-	if strings.TrimSpace(e.name) == "" {
+	if !safeFunctionName(e.name) {
 		return "", fmt.Errorf("SQL function expression requires a name")
 	}
 	if len(e.arguments) == 0 {
@@ -211,4 +211,17 @@ func (e functionExpression) renderExpression(context *renderContext) (string, er
 		arguments[index] = rendered
 	}
 	return e.name + "(" + strings.Join(arguments, ", ") + ")", nil
+}
+
+func safeFunctionName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for index, character := range value {
+		if character == '_' || character >= 'A' && character <= 'Z' || index > 0 && character >= '0' && character <= '9' {
+			continue
+		}
+		return false
+	}
+	return true
 }

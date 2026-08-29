@@ -136,7 +136,10 @@ func (b *SelectBuilder) ForKeyShare(modifiers ...string) *SelectBuilder {
 func lockClause(base string, modifiers []string) string {
 	clause := base
 	for _, modifier := range modifiers {
-		if trimmed := strings.TrimSpace(modifier); trimmed != "" {
+		if trimmed := strings.ToUpper(strings.TrimSpace(modifier)); trimmed != "" {
+			if trimmed != "NOWAIT" && trimmed != "SKIP LOCKED" {
+				return "INVALID"
+			}
 			clause += " " + trimmed
 		}
 	}
@@ -306,6 +309,9 @@ func (b *SelectBuilder) render(context *renderContext, topLevel bool) (string, e
 		statement += " OFFSET " + context.argument(b.offset)
 	}
 	if b.locking != "" {
+		if b.locking == "INVALID" {
+			return "", fmt.Errorf("SQL row lock modifier is invalid")
+		}
 		statement += " " + b.locking
 	}
 	return statement, nil

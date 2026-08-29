@@ -510,3 +510,31 @@ func TestAdvancedErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestBuilderRejectsRawSQLInjectionSurfaces(t *testing.T) {
+	renderer := sqliteRenderer(t)
+	tests := []struct {
+		name  string
+		build func() (string, []any, error)
+	}{
+		{"function", func() (string, []any, error) {
+			return builder.NewSelectBuilder(renderer, "records").Projections(builder.Project(builder.Func("COUNT); DROP TABLE users;--", builder.Column("id")))).Build()
+		}},
+		{"cast", func() (string, []any, error) {
+			return builder.NewSelectBuilder(renderer, "records").Projections(builder.Project(builder.Cast(builder.Column("id"), "TEXT); DROP TABLE users;--"))).Build()
+		}},
+		{"window frame", func() (string, []any, error) {
+			return builder.NewSelectBuilder(renderer, "records").Projections(builder.Project(builder.Over(builder.RowNumber(), builder.Window().Frame("ROWS CURRENT ROW); DROP TABLE users;--")))).Build()
+		}},
+		{"row lock", func() (string, []any, error) {
+			return builder.NewSelectBuilder(renderer, "records").Columns("id").ForUpdate("NOWAIT; DROP TABLE users").Build()
+		}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if query, _, err := test.build(); err == nil || query != "" {
+				t.Fatalf("unsafe SQL input was accepted: query=%q err=%v", query, err)
+			}
+		})
+	}
+}

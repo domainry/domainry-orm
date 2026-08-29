@@ -165,7 +165,7 @@ PostgreSQL and SQLite. MySQL has no such syntax and is emulated with a leading
 
 ## Expressions
 
-Columns and values: `Column`, `QualifiedColumn`, `Value`, `Star`, `Raw`.
+Columns and values: `Column`, `QualifiedColumn`, `TableColumn`, `Value`, `Star`.
 
 Arithmetic: `Add`, `Subtract`, `Multiply`, `Divide`.
 
