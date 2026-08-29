@@ -12,6 +12,7 @@ type Join struct {
 	predicate Predicate
 	subquery  *SelectBuilder
 	lateral   bool
+	cte       bool
 }
 
 func InnerJoin(table, alias string, predicate Predicate) Join {
@@ -30,6 +31,15 @@ func FullJoin(table, alias string, predicate Predicate) Join {
 // CrossJoin joins without an ON predicate.
 func CrossJoin(table, alias string) Join {
 	return Join{kind: "CROSS JOIN", table: table, alias: alias}
+}
+
+// InnerJoinCTE and LeftJoinCTE join a named common table expression. CTE
+// names are logical identifiers and never receive a physical table prefix.
+func InnerJoinCTE(name, alias string, predicate Predicate) Join {
+	return Join{kind: "INNER JOIN", table: name, alias: alias, predicate: predicate, cte: true}
+}
+func LeftJoinCTE(name, alias string, predicate Predicate) Join {
+	return Join{kind: "LEFT JOIN", table: name, alias: alias, predicate: predicate, cte: true}
 }
 
 // InnerJoinSubquery, LeftJoinSubquery, RightJoinSubquery and FullJoinSubquery
@@ -75,6 +85,9 @@ func (j Join) render(context *renderContext) (string, error) {
 		source = prefix + "(" + inner + ") AS " + context.renderer.Identifier(j.alias)
 	} else {
 		source = context.renderer.Table(j.table)
+		if j.cte {
+			source = context.renderer.Identifier(j.table)
+		}
 		if strings.TrimSpace(j.alias) != "" {
 			source += " AS " + context.renderer.Identifier(j.alias)
 		}

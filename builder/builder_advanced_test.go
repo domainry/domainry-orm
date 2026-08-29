@@ -127,6 +127,25 @@ func TestSelectCTE(t *testing.T) {
 			`WITH RECURSIVE "descendants" AS (SELECT "id", "parent_id" FROM "tree" WHERE "parent_id" IS NULL) SELECT "id" FROM "descendants"`,
 			nil)
 	})
+	t.Run("namespaced cte source and join stay logical", func(t *testing.T) {
+		dialectValue, err := dialect.New(dialect.Postgres)
+		if err != nil {
+			t.Fatal(err)
+		}
+		renderer, err := dialectValue.WithNamespace("runtime", "module_")
+		if err != nil {
+			t.Fatal(err)
+		}
+		left := builder.NewSelectBuilder(renderer, "users").Columns("id", "team_id")
+		right := builder.NewSelectBuilder(renderer, "teams").Columns("id")
+		query := builder.NewSelectFromCTE(renderer, "active_users", "u").
+			Projections(builder.Project(builder.QualifiedColumn("u", "id"))).
+			Join(builder.LeftJoinCTE("active_teams", "t", builder.EqualExpressions(builder.QualifiedColumn("u", "team_id"), builder.QualifiedColumn("t", "id")))).
+			With("active_users", left).With("active_teams", right)
+		sql, args, err := query.Build()
+		assertSQL(t, sql, args, err,
+			`WITH "active_users" AS (SELECT "id", "team_id" FROM "runtime"."module_users"), "active_teams" AS (SELECT "id" FROM "runtime"."module_teams") SELECT "u"."id" FROM "active_users" AS "u" LEFT JOIN "active_teams" AS "t" ON "u"."team_id" = "t"."id"`, nil)
+	})
 }
 
 // -----------------------------------------------------------------------------

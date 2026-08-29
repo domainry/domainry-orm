@@ -18,6 +18,7 @@ type SelectBuilder struct {
 	fromSubquery  *SelectBuilder
 	fromAlias     string
 	fromLateral   bool
+	fromCTE       bool
 	ctes          []cte
 	columns       []string
 	projections   []Projection
@@ -54,6 +55,13 @@ func NewSelectBuilder(renderer Renderer, table string) *SelectBuilder {
 // (subquery) with a mandatory alias.
 func NewSelectFromSubquery(renderer Renderer, subquery *SelectBuilder, alias string) *SelectBuilder {
 	return &SelectBuilder{renderer: renderer, fromSubquery: subquery, fromAlias: strings.TrimSpace(alias)}
+}
+
+// NewSelectFromCTE selects from a common-table-expression name. Unlike a
+// physical table, a CTE is rendered as an identifier and never receives the
+// renderer's schema or table prefix.
+func NewSelectFromCTE(renderer Renderer, name, alias string) *SelectBuilder {
+	return &SelectBuilder{renderer: renderer, table: strings.TrimSpace(name), alias: strings.TrimSpace(alias), fromCTE: true}
 }
 
 func (b *SelectBuilder) Columns(columns ...string) *SelectBuilder {
@@ -366,6 +374,9 @@ func (b *SelectBuilder) renderFrom(context *renderContext) (string, error) {
 		return prefix + "(" + inner + ") AS " + b.renderer.Identifier(b.fromAlias), nil
 	}
 	from := b.renderer.Table(b.table)
+	if b.fromCTE {
+		from = b.renderer.Identifier(b.table)
+	}
 	if b.alias != "" {
 		from += " AS " + b.renderer.Identifier(b.alias)
 	}
