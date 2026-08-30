@@ -108,8 +108,38 @@ func InitializeOwned(ctx context.Context, database *sql.DB, config OwnedConnecti
 	if _, err := database.ExecContext(ctx, "PRAGMA foreign_keys = "+foreignKeys); err != nil {
 		return fmt.Errorf("configure sqlite foreign keys: %w", err)
 	}
-	if _, err := database.ExecContext(ctx, "PRAGMA journal_mode = "+JournalModeWAL); err != nil {
+	if err := configureWAL(ctx, database, config.BusyTimeout); err != nil {
 		return fmt.Errorf("configure sqlite WAL: %w", err)
 	}
 	return nil
+}
+
+func configureWAL(ctx context.Context, database *sql.DB, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		_, err := database.ExecContext(ctx, "PRAGMA journal_mode = "+JournalModeWAL)
+		if err == nil || !sqliteBusy(err) {
+			return err
+		}
+		if time.Now().Add(10 * time.Millisecond).After(deadline) {
+			return err
+		}
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func sqliteBusy(err error) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if coded, ok := current.(interface{ Code() int }); ok && coded.Code()&0xff == 5 {
+			return true
+		}
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "sqlite_busy") || strings.Contains(message, "database is locked")
 }
