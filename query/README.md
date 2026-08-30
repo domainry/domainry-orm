@@ -1,6 +1,6 @@
-# builder
+# query
 
-`builder` assembles parameterized SQL statements for the three dialects that
+`query` assembles parameterized SQL statements for the three dialects that
 `domainry-orm` supports: SQLite, PostgreSQL and MySQL. Every builder takes a
 `dialect.Renderer` at construction time and returns `(sql string, args []any,
 err error)` from `Build()`. Placeholders and identifier quoting follow the
@@ -20,8 +20,8 @@ sql, args, err := query.NewSelectBuilder(renderer, "users").
 // SELECT "id", "email" FROM "users" WHERE "active" = $1   args=[true]
 ```
 
-All examples below are covered by `builder/builder_advanced_test.go` and
-`builder/builder_sql_test.go`.
+All examples below are covered by `query/query_advanced_test.go` and
+`query/query_sql_test.go`.
 
 ## Builders
 

@@ -12,8 +12,8 @@ with their owning modules.
 
 - `sqlhost`: narrow `database/sql` execution and transaction contracts.
 - `dialect`: portable SQL identifier, table, placeholder, and insert behavior.
-- `builder`: parameterized SELECT/INSERT/UPDATE/DELETE construction across
-  SQLite, PostgreSQL and MySQL. See [`builder/README.md`](builder/README.md).
+- `query`: parameterized SELECT/INSERT/UPDATE/DELETE construction across
+  SQLite, PostgreSQL and MySQL. See [`query/README.md`](query/README.md).
 - `schema`: portable, domain-neutral table, column, index, and ALTER declarations.
 - `recordschema`: Domainry Record table conventions, including workspace and
   audit system columns.

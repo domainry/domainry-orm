@@ -42,21 +42,6 @@ func (b *TableBuilder) IfNotExists() *TableBuilder {
 	return b
 }
 
-// WithoutRequiredColumns removes convention-owned columns. It exists for
-// compatibility facades; new infrastructure declarations should start with
-// NewTable instead of opting out of a convention after construction.
-func (b *TableBuilder) WithoutRequiredColumns() *TableBuilder {
-	b.requiredColumns = nil
-	return b
-}
-
-// WithoutSystemColumns is retained for the legacy builder facade. New code
-// should construct infrastructure tables with schema.NewTable directly.
-// Deprecated: use NewTable.
-func (b *TableBuilder) WithoutSystemColumns() *TableBuilder {
-	return b.WithoutRequiredColumns()
-}
-
 func (b *TableBuilder) Columns(columns ...ColumnDefinition) *TableBuilder {
 	b.columns = append([]ColumnDefinition(nil), columns...)
 	return b
