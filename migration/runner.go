@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-orm/builder"
+	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-orm/schema"
 	"github.com/domainry/domainry-orm/sqlhost"
 )
@@ -62,11 +62,11 @@ type Options struct {
 // protocol. Callers that need an advisory lock acquire it before Apply.
 type Runner struct {
 	database sqlhost.Database
-	renderer builder.Renderer
+	renderer query.Renderer
 	options  Options
 }
 
-func NewRunner(database sqlhost.Database, renderer builder.Renderer, options Options) (*Runner, error) {
+func NewRunner(database sqlhost.Database, renderer query.Renderer, options Options) (*Runner, error) {
 	if database == nil || renderer == nil {
 		return nil, fmt.Errorf("migration runner requires database and renderer")
 	}
@@ -126,19 +126,19 @@ func (r *Runner) ensureLedger(ctx context.Context) error {
 
 func (r *Runner) applyOne(ctx context.Context, migration Migration) error {
 	checksum := Checksum(migration)
-	query, arguments, err := builder.NewSelectBuilder(r.renderer, r.options.LedgerTable).
-		Columns("checksum", "dirty").Where(builder.Equal("version", migration.Version)).Build()
+	statement, arguments, err := query.NewSelectBuilder(r.renderer, r.options.LedgerTable).
+		Columns("checksum", "dirty").Where(query.Equal("version", migration.Version)).Build()
 	if err != nil {
 		return err
 	}
-	applied, dirty, found, err := readLedger(ctx, r.database, query, arguments)
+	applied, dirty, found, err := readLedger(ctx, r.database, statement, arguments)
 	if err != nil {
 		return fmt.Errorf("inspect migration %d: %w", migration.Version, err)
 	}
 	if found {
 		return validateLedger(migration, checksum, applied, dirty)
 	}
-	insert, insertArguments, err := builder.NewInsertBuilder(r.renderer, r.options.LedgerTable).
+	insert, insertArguments, err := query.NewInsertBuilder(r.renderer, r.options.LedgerTable).
 		Columns("version", "name", "checksum", "dirty", "applied_at").
 		Values(migration.Version, strings.TrimSpace(migration.Name), checksum, true, "").Build()
 	if err != nil {
@@ -148,7 +148,7 @@ func (r *Runner) applyOne(ctx context.Context, migration Migration) error {
 		if r.options.InsertConflict == nil || !r.options.InsertConflict(err) {
 			return fmt.Errorf("record dirty migration %d: %w", migration.Version, err)
 		}
-		return r.waitForPeer(ctx, migration, checksum, query, arguments)
+		return r.waitForPeer(ctx, migration, checksum, statement, arguments)
 	}
 	tx, err := r.database.BeginTx(ctx, nil)
 	if err != nil {
@@ -160,9 +160,9 @@ func (r *Runner) applyOne(ctx context.Context, migration Migration) error {
 			return fmt.Errorf("apply migration %d: %w", migration.Version, err)
 		}
 	}
-	complete, completeArguments, err := builder.NewUpdateBuilder(r.renderer, r.options.LedgerTable).
+	complete, completeArguments, err := query.NewUpdateBuilder(r.renderer, r.options.LedgerTable).
 		Set("dirty", false).Set("applied_at", r.options.Now().UTC().Format(time.RFC3339Nano)).
-		Where(builder.And(builder.Equal("version", migration.Version), builder.Equal("checksum", checksum))).Build()
+		Where(query.And(query.Equal("version", migration.Version), query.Equal("checksum", checksum))).Build()
 	if err != nil {
 		return err
 	}

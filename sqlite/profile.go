@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-orm/dialect"
 	ormdriver "github.com/domainry/domainry-orm/driver"
+	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/schema"
 )
 
 type Profile struct{}
@@ -20,19 +21,19 @@ func (Profile) TextKeyColumnType(int) string { return "TEXT" }
 func (Profile) Capabilities() ormdriver.Capabilities {
 	return ormdriver.Capabilities{Returning: true, PartialIndex: true, IndexIfNotExists: true, TransactionalDDL: true, MaximumBindParameters: 999}
 }
-func (Profile) ApplyUpsert(value *builder.InsertBuilder, keys []string, assignments ...builder.Assignment) (*builder.InsertBuilder, error) {
+func (Profile) ApplyUpsert(value *query.InsertBuilder, keys []string, assignments ...query.Assignment) (*query.InsertBuilder, error) {
 	return value.OnConflictDoUpdate(keys, assignments...), nil
 }
-func (Profile) ApplyReturning(value *builder.InsertBuilder, columns ...string) (*builder.InsertBuilder, error) {
+func (Profile) ApplyReturning(value *query.InsertBuilder, columns ...string) (*query.InsertBuilder, error) {
 	return value.Returning(columns...), nil
 }
-func (Profile) ApplyClaimLock(value *builder.SelectBuilder, skipLocked bool) (*builder.SelectBuilder, error) {
+func (Profile) ApplyClaimLock(value *query.SelectBuilder, skipLocked bool) (*query.SelectBuilder, error) {
 	if skipLocked {
 		return nil, ormdriver.ErrSkipLockedUnsupported
 	}
 	return value, nil
 }
-func (Profile) ApplyCreateIndex(value *builder.CreateIndexBuilder) *builder.CreateIndexBuilder {
+func (Profile) ApplyCreateIndex(value *schema.IndexBuilder) *schema.IndexBuilder {
 	return value.IfNotExists()
 }
 func (Profile) IsCreateIndexAlreadyExists(error) bool { return false }

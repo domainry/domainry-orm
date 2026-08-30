@@ -1,11 +1,11 @@
-package builder_test
+package query_test
 
 import (
 	"strings"
 	"testing"
 
-	"github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-orm/dialect"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func TestConcatRendersNativeParameterizedExpression(t *testing.T) {
@@ -25,11 +25,11 @@ func TestConcatRendersNativeParameterizedExpression(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		query, args, err := builder.NewSelectBuilder(renderer, "audit_events").
-			Projections(builder.Project(builder.Lower(builder.Concat(
-				builder.Coalesce(builder.Column("event"), builder.Value("")),
-				builder.Value(" "),
-				builder.Coalesce(builder.Column("object_key"), builder.Value("")),
+		query, args, err := query.NewSelectBuilder(renderer, "audit_events").
+			Projections(query.Project(query.Lower(query.Concat(
+				query.Coalesce(query.Column("event"), query.Value("")),
+				query.Value(" "),
+				query.Coalesce(query.Column("object_key"), query.Value("")),
 			)))).Build()
 		if err != nil {
 			t.Fatal(err)
@@ -50,7 +50,7 @@ func TestConflictDoNothingIsPortableWithoutInsertIgnore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		query, _, err := builder.NewInsertBuilder(renderer, "seed").Columns("id", "value").Values("one", "value").OnConflictDoNothing("id").Build()
+		query, _, err := query.NewInsertBuilder(renderer, "seed").Columns("id", "value").Values("one", "value").OnConflictDoNothing("id").Build()
 		if err != nil {
 			t.Fatalf("dialect=%s: %v", name, err)
 		}

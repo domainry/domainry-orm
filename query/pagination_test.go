@@ -1,18 +1,18 @@
-package builder_test
+package query_test
 
 import (
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-orm/dialect"
+	"github.com/domainry/domainry-orm/query"
 )
 
 func TestFirstPageAppendsStableIDOrder(t *testing.T) {
 	renderer := workspaceRenderer(t, dialect.Postgres)
-	statement, args, err := builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").
-		Columns("id", "name").FirstPage(50, builder.KeysetAscending("name")).Build()
+	statement, args, err := query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").
+		Columns("id", "name").FirstPage(50, query.KeysetAscending("name")).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,9 +24,9 @@ func TestFirstPageAppendsStableIDOrder(t *testing.T) {
 
 func TestNextPageBuildsCompositeKeysetAndRequiresID(t *testing.T) {
 	renderer := workspaceRenderer(t, dialect.Postgres)
-	statement, args, err := builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").
+	statement, args, err := query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").
 		Columns("id", "name").
-		NextPage("user-9", 20, map[string]any{"name": "Zhao"}, builder.KeysetDescending("name")).Build()
+		NextPage("user-9", 20, map[string]any{"name": "Zhao"}, query.KeysetDescending("name")).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,21 +43,21 @@ func TestNextPageBuildsCompositeKeysetAndRequiresID(t *testing.T) {
 		t.Fatalf("args=%#v", args)
 	}
 
-	if _, _, err := builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").NextPage("", 20, nil).Build(); err == nil {
+	if _, _, err := query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").NextPage("", 20, nil).Build(); err == nil {
 		t.Fatal("missing cursor ID was accepted")
 	}
-	if _, _, err := builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").NextPage("user-9", 20, nil, builder.KeysetAscending("name")).Build(); err == nil {
+	if _, _, err := query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").NextPage("user-9", 20, nil, query.KeysetAscending("name")).Build(); err == nil {
 		t.Fatal("missing sort cursor value was accepted")
 	}
 }
 
 func TestKeysetPaginationRejectsUnstableContracts(t *testing.T) {
 	renderer := workspaceRenderer(t, dialect.SQLite)
-	tests := []*builder.SelectBuilder{
-		builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(0),
-		builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, builder.KeysetOrder{Column: "name", Direction: "sideways"}),
-		builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, builder.KeysetAscending("id"), builder.KeysetAscending("name")),
-		builder.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, builder.KeysetAscending("name"), builder.KeysetDescending("name")),
+	tests := []*query.SelectBuilder{
+		query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(0),
+		query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, query.KeysetOrder{Column: "name", Direction: "sideways"}),
+		query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, query.KeysetAscending("id"), query.KeysetAscending("name")),
+		query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, query.KeysetAscending("name"), query.KeysetDescending("name")),
 	}
 	for index, query := range tests {
 		if _, _, err := query.Build(); err == nil {

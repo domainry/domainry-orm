@@ -17,12 +17,6 @@ var systemColumns = []schema.ColumnDefinition{
 	schema.Column("update_by", schema.TextKey(255)),
 }
 
-// NewTable declares a Domainry Record table. The canonical system columns are
-// merged after source-owned columns and cannot be omitted accidentally.
-func NewTable(renderer schema.Renderer, table string) *schema.TableBuilder {
-	return schema.NewTableWithRequiredColumns(renderer, table, systemColumns...)
-}
-
 // SystemColumnNames returns the stable physical system-column inventory in
 // migration order.
 func SystemColumnNames() []string {

@@ -6,11 +6,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-orm/dialect"
 	ormdriver "github.com/domainry/domainry-orm/driver"
 	"github.com/domainry/domainry-orm/mysql"
 	"github.com/domainry/domainry-orm/postgres"
+	"github.com/domainry/domainry-orm/query"
 	"github.com/domainry/domainry-orm/sqlite"
 )
 
@@ -21,8 +21,8 @@ func TestProfilesOwnEngineSpecificUpsert(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		insert := builder.NewInsertBuilder(renderer, "jobs").Columns("id", "status").Values("j1", "queued")
-		insert, err = profile.ApplyUpsert(insert, []string{"id"}, builder.AssignExpression("status", builder.InsertedValue("status")))
+		insert := query.NewInsertBuilder(renderer, "jobs").Columns("id", "status").Values("j1", "queued")
+		insert, err = profile.ApplyUpsert(insert, []string{"id"}, query.AssignExpression("status", query.InsertedValue("status")))
 		if err != nil {
 			t.Fatalf("%s upsert: %v", profile.Name(), err)
 		}

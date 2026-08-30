@@ -8,8 +8,9 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/domainry/domainry-orm/builder"
 	"github.com/domainry/domainry-orm/dialect"
+	"github.com/domainry/domainry-orm/query"
+	"github.com/domainry/domainry-orm/schema"
 	"github.com/domainry/domainry-orm/sqlhost"
 )
 
@@ -42,10 +43,10 @@ type Profile interface {
 	Name() dialect.Name
 	Capabilities() Capabilities
 	TextKeyColumnType(int) string
-	ApplyUpsert(*builder.InsertBuilder, []string, ...builder.Assignment) (*builder.InsertBuilder, error)
-	ApplyReturning(*builder.InsertBuilder, ...string) (*builder.InsertBuilder, error)
-	ApplyClaimLock(*builder.SelectBuilder, bool) (*builder.SelectBuilder, error)
-	ApplyCreateIndex(*builder.CreateIndexBuilder) *builder.CreateIndexBuilder
+	ApplyUpsert(*query.InsertBuilder, []string, ...query.Assignment) (*query.InsertBuilder, error)
+	ApplyReturning(*query.InsertBuilder, ...string) (*query.InsertBuilder, error)
+	ApplyClaimLock(*query.SelectBuilder, bool) (*query.SelectBuilder, error)
+	ApplyCreateIndex(*schema.IndexBuilder) *schema.IndexBuilder
 	IsCreateIndexAlreadyExists(error) bool
 	ClassifyError(error) ErrorKind
 	BeginWrite(context.Context, *sql.DB) (Transaction, error)
