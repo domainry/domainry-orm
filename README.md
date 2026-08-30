@@ -14,5 +14,9 @@ with their owning modules.
 - `dialect`: portable SQL identifier, table, placeholder, and insert behavior.
 - `builder`: parameterized SELECT/INSERT/UPDATE/DELETE construction across
   SQLite, PostgreSQL and MySQL. See [`builder/README.md`](builder/README.md).
+- `schema`: portable, domain-neutral table, column, index, and ALTER declarations.
+- `recordschema`: Domainry Record table conventions, including workspace and
+  audit system columns.
+- `batch`: database-parameter budget and statement batch calculation.
 - `migration`: source-owned migration and physical baseline declarations.
 - `postgres`: PostgreSQL capability probes, retry, and safe failure classification.

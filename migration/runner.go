@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/domainry/domainry-orm/builder"
+	"github.com/domainry/domainry-orm/schema"
 	"github.com/domainry/domainry-orm/sqlhost"
 )
 
@@ -106,13 +107,13 @@ func Checksum(migration Migration) string {
 }
 
 func (r *Runner) ensureLedger(ctx context.Context) error {
-	statement, arguments, err := builder.NewCreateTableBuilder(r.renderer, r.options.LedgerTable).
-		IfNotExists().WithoutSystemColumns().Columns(
-		builder.DefineColumn("version", builder.BigIntType()).NotNull(),
-		builder.DefineColumn("name", builder.TextKeyType(191)).NotNull(),
-		builder.DefineColumn("checksum", builder.TextKeyType(64)).NotNull(),
-		builder.DefineColumn("dirty", builder.BooleanType()).NotNull(),
-		builder.DefineColumn("applied_at", builder.TextKeyType(40)).NotNull(),
+	statement, arguments, err := schema.NewTable(r.renderer, r.options.LedgerTable).
+		IfNotExists().Columns(
+		schema.Column("version", schema.BigInt()).NotNull(),
+		schema.Column("name", schema.TextKey(191)).NotNull(),
+		schema.Column("checksum", schema.TextKey(64)).NotNull(),
+		schema.Column("dirty", schema.Boolean()).NotNull(),
+		schema.Column("applied_at", schema.TextKey(40)).NotNull(),
 	).PrimaryKey("version").Build()
 	if err != nil {
 		return fmt.Errorf("build migration ledger: %w", err)

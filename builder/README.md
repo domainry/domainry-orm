@@ -7,27 +7,9 @@ err error)` from `Build()`. Placeholders and identifier quoting follow the
 renderer, so the same builder code produces `$N`/`"col"` for PostgreSQL, `?`/
 `"col"` for SQLite and `?`/`` `col` `` for MySQL.
 
-## Schema construction
-
-`NewCreateTableBuilder` always materializes the Domainry system columns below,
-even when the schema owner supplies no business columns:
-
-- `workspace_id`, `id`
-- `created_at`, `updated_at`
-- `deleted`, `ext_info`
-- `create_by`, `update_by`
-
-Schema owners may still mention a system column explicitly when adopting a
-pre-existing physical contract; the builder never emits it twice. New schemas
-should omit these columns and declare only their business-owned fields.
-Infrastructure-owned tables with a different physical contract must opt out
-explicitly with `WithoutSystemColumns()` and declare every column themselves.
-
-Portable column constructors cover bounded and unbounded text, small/integer/
-big integer, exact decimal, real/double, boolean, date/time/timestamp, JSON,
-UUID, and binary values. Rendering preserves the stronger native type where a
-dialect has one (`JSONB`, `UUID`, and `BYTEA` on PostgreSQL; `JSON` and
-`LONGBLOB` on MySQL) and uses the corresponding SQLite storage class.
+DDL and column declarations no longer belong to this package. Use `schema` for
+infrastructure-owned tables and `recordschema` for Domainry Record tables.
+The old DDL names remain temporarily as deprecated source-compatible facades.
 
 ```go
 renderer, _ := dialect.ParseRenderer("postgres", "", "")
