@@ -1,6 +1,3 @@
-// Package driver defines database-engine strategies consumed by persistence
-// adapters. Repositories depend on Profile instead of branching on dialect
-// names themselves.
 package driver
 
 import (

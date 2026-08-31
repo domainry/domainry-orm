@@ -70,14 +70,14 @@ func (Profile) BeginWrite(ctx context.Context, database *sql.DB) (ormdriver.Tran
 	}
 	return &immediateTransaction{connection: connection}, nil
 }
-func (t *immediateTransaction) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
-	return t.connection.ExecContext(ctx, query, args...)
+func (t *immediateTransaction) ExecContext(ctx context.Context, queryValue string, args ...any) (sql.Result, error) {
+	return t.connection.ExecContext(ctx, queryValue, args...)
 }
-func (t *immediateTransaction) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
-	return t.connection.QueryContext(ctx, query, args...)
+func (t *immediateTransaction) QueryContext(ctx context.Context, queryValue string, args ...any) (*sql.Rows, error) {
+	return t.connection.QueryContext(ctx, queryValue, args...)
 }
-func (t *immediateTransaction) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
-	return t.connection.QueryRowContext(ctx, query, args...)
+func (t *immediateTransaction) QueryRowContext(ctx context.Context, queryValue string, args ...any) *sql.Row {
+	return t.connection.QueryRowContext(ctx, queryValue, args...)
 }
 func (t *immediateTransaction) Commit(ctx context.Context) error {
 	_, err := t.connection.ExecContext(ctx, "COMMIT")

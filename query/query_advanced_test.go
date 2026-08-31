@@ -16,10 +16,6 @@ func mysqlRenderer(t *testing.T) dialect.Renderer {
 	return renderer
 }
 
-// -----------------------------------------------------------------------------
-// Row locking: FOR UPDATE / FOR SHARE (+ NOWAIT / SKIP LOCKED)
-// -----------------------------------------------------------------------------
-
 func TestSelectRowLocking(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -53,10 +49,6 @@ func TestSelectRowLocking(t *testing.T) {
 		})
 	}
 }
-
-// -----------------------------------------------------------------------------
-// Set operations: UNION / INTERSECT / EXCEPT (+ ALL)
-// -----------------------------------------------------------------------------
 
 func TestSelectSetOperations(t *testing.T) {
 	base := func(r dialect.Renderer, table string, value any) *query.SelectBuilder {
@@ -95,10 +87,6 @@ func TestSelectSetOperations(t *testing.T) {
 			[]any{"x", "y"})
 	})
 }
-
-// -----------------------------------------------------------------------------
-// CTEs: WITH / WITH RECURSIVE
-// -----------------------------------------------------------------------------
 
 func TestSelectCTE(t *testing.T) {
 	t.Run("single cte", func(t *testing.T) {
@@ -158,10 +146,6 @@ func TestSelectBuildWithOffset(t *testing.T) {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Derived tables (FROM subquery) and LATERAL
-// -----------------------------------------------------------------------------
-
 func TestSelectDerivedTable(t *testing.T) {
 	t.Run("from subquery", func(t *testing.T) {
 		inner := query.NewSelectBuilder(sqliteRenderer(t), "events").
@@ -188,10 +172,6 @@ func TestSelectDerivedTable(t *testing.T) {
 			[]any{1})
 	})
 }
-
-// -----------------------------------------------------------------------------
-// DISTINCT ON, ROLLUP / CUBE / GROUPING SETS
-// -----------------------------------------------------------------------------
 
 func TestSelectGroupingAndDistinctOn(t *testing.T) {
 	t.Run("distinct on", func(t *testing.T) {
@@ -226,10 +206,6 @@ func TestSelectGroupingAndDistinctOn(t *testing.T) {
 	})
 }
 
-// -----------------------------------------------------------------------------
-// Joins: RIGHT / FULL / CROSS
-// -----------------------------------------------------------------------------
-
 func TestJoinVariants(t *testing.T) {
 	on := query.EqualExpressions(query.QualifiedColumn("a", "id"), query.QualifiedColumn("b", "a_id"))
 	t.Run("right join", func(t *testing.T) {
@@ -259,10 +235,6 @@ func TestJoinVariants(t *testing.T) {
 			nil)
 	})
 }
-
-// -----------------------------------------------------------------------------
-// Subquery predicates: IN / comparison / EXISTS
-// -----------------------------------------------------------------------------
 
 func TestSubqueryPredicates(t *testing.T) {
 	t.Run("in subquery", func(t *testing.T) {
@@ -311,10 +283,6 @@ func TestSubqueryPredicates(t *testing.T) {
 	})
 }
 
-// -----------------------------------------------------------------------------
-// ILIKE (dialect-aware) and NULLS ordering (dialect-aware)
-// -----------------------------------------------------------------------------
-
 func TestILikeDialects(t *testing.T) {
 	t.Run("postgres native ilike", func(t *testing.T) {
 		sql, args, err := query.NewSelectBuilder(postgresRenderer(t), "users").Columns("id").
@@ -355,10 +323,6 @@ func TestNullsOrdering(t *testing.T) {
 		assertSQL(t, sql, args, err, "SELECT `id` FROM `t` ORDER BY ISNULL(`score`) DESC, `score` DESC", nil)
 	})
 }
-
-// -----------------------------------------------------------------------------
-// Window functions, CAST, FILTER, Func, arithmetic
-// -----------------------------------------------------------------------------
 
 func TestWindowAndScalarExpressions(t *testing.T) {
 	t.Run("row_number over partition order", func(t *testing.T) {
@@ -411,10 +375,6 @@ func TestWindowAndScalarExpressions(t *testing.T) {
 	})
 }
 
-// -----------------------------------------------------------------------------
-// RETURNING (INSERT / UPDATE / DELETE)
-// -----------------------------------------------------------------------------
-
 func TestReturningClauses(t *testing.T) {
 	t.Run("insert returning", func(t *testing.T) {
 		sql, args, err := query.NewInsertBuilder(postgresRenderer(t), "users").
@@ -436,10 +396,6 @@ func TestReturningClauses(t *testing.T) {
 		assertSQL(t, sql, args, err, `DELETE FROM "sessions" WHERE "id" = $1 RETURNING "id"`, []any{"s1"})
 	})
 }
-
-// -----------------------------------------------------------------------------
-// Upsert: ON CONFLICT (PG/SQLite) and ON DUPLICATE KEY UPDATE (MySQL)
-// -----------------------------------------------------------------------------
 
 func TestUpsert(t *testing.T) {
 	t.Run("on conflict do nothing", func(t *testing.T) {
@@ -481,10 +437,6 @@ func TestUpsert(t *testing.T) {
 	})
 }
 
-// -----------------------------------------------------------------------------
-// INSERT ... SELECT
-// -----------------------------------------------------------------------------
-
 func TestInsertFromSelect(t *testing.T) {
 	source := query.NewSelectBuilder(postgresRenderer(t), "staging_users").
 		Columns("id", "email").Where(query.Equal("valid", true))
@@ -494,10 +446,6 @@ func TestInsertFromSelect(t *testing.T) {
 		`INSERT INTO "users" ("id", "email") SELECT "id", "email" FROM "staging_users" WHERE "valid" = $1`,
 		[]any{true})
 }
-
-// -----------------------------------------------------------------------------
-// Error coverage for the new surface
-// -----------------------------------------------------------------------------
 
 func TestAdvancedErrors(t *testing.T) {
 	r := sqliteRenderer(t)
@@ -561,8 +509,8 @@ func TestBuilderRejectsRawSQLInjectionSurfaces(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if query, _, err := test.build(); err == nil || query != "" {
-				t.Fatalf("unsafe SQL input was accepted: query=%q err=%v", query, err)
+			if queryValue, _, err := test.build(); err == nil || queryValue != "" {
+				t.Fatalf("unsafe SQL input was accepted: query=%q err=%v", queryValue, err)
 			}
 		})
 	}

@@ -26,8 +26,6 @@ func postgresRenderer(t *testing.T) dialect.Renderer {
 	return renderer
 }
 
-// assertSQL fails the test unless Build returns the expected statement, args and
-// a nil error.
 func assertSQL(t *testing.T, sql string, args []any, err error, wantSQL string, wantArgs []any) {
 	t.Helper()
 	if err != nil {
@@ -43,10 +41,6 @@ func assertSQL(t *testing.T, sql string, args []any, err error, wantSQL string, 
 		t.Fatalf("args mismatch:\n got=%v\nwant=%v", args, wantArgs)
 	}
 }
-
-// -----------------------------------------------------------------------------
-// SELECT builder
-// -----------------------------------------------------------------------------
 
 func TestSelectSQLVariants(t *testing.T) {
 	tests := []struct {
@@ -308,10 +302,6 @@ func TestSelectPostgresPlaceholders(t *testing.T) {
 		[]any{"US", "a", "b", 18, 65, 10})
 }
 
-// -----------------------------------------------------------------------------
-// INSERT builder
-// -----------------------------------------------------------------------------
-
 func TestInsertSQLVariants(t *testing.T) {
 	t.Run("single row", func(t *testing.T) {
 		sql, args, err := query.NewInsertBuilder(sqliteRenderer(t), "users").
@@ -343,10 +333,6 @@ func TestInsertSQLVariants(t *testing.T) {
 			[]any{"u1", "a@b.co", "u2", "c@d.co"})
 	})
 }
-
-// -----------------------------------------------------------------------------
-// UPDATE builder
-// -----------------------------------------------------------------------------
 
 func TestUpdateSQLVariants(t *testing.T) {
 	t.Run("single assignment", func(t *testing.T) {
@@ -399,10 +385,6 @@ func TestUpdateSQLVariants(t *testing.T) {
 	})
 }
 
-// -----------------------------------------------------------------------------
-// DELETE builder
-// -----------------------------------------------------------------------------
-
 func TestDeleteSQLVariants(t *testing.T) {
 	t.Run("equality", func(t *testing.T) {
 		sql, args, err := query.NewDeleteBuilder(sqliteRenderer(t), "users").
@@ -430,10 +412,6 @@ func TestDeleteSQLVariants(t *testing.T) {
 	})
 }
 
-// -----------------------------------------------------------------------------
-// Namespace / schema qualification
-// -----------------------------------------------------------------------------
-
 func TestBuildersHonorNamespace(t *testing.T) {
 	renderer, err := dialect.ParseRenderer("postgres", "app", "t_")
 	if err != nil {
@@ -451,10 +429,6 @@ func TestBuildersHonorNamespace(t *testing.T) {
 	deleteSQL, deleteArgs, err := query.NewDeleteBuilder(renderer, "users").Where(query.Equal("id", "u1")).Build()
 	assertSQL(t, deleteSQL, deleteArgs, err, `DELETE FROM "app"."t_users" WHERE "id" = $1`, []any{"u1"})
 }
-
-// -----------------------------------------------------------------------------
-// Error / validation coverage
-// -----------------------------------------------------------------------------
 
 func TestBuilderErrors(t *testing.T) {
 	r := sqliteRenderer(t)
@@ -519,10 +493,6 @@ func TestBuilderErrors(t *testing.T) {
 		})
 	}
 }
-
-// -----------------------------------------------------------------------------
-// Full API surface coverage: every remaining constructor not exercised above.
-// -----------------------------------------------------------------------------
 
 func TestExpressionCoverage(t *testing.T) {
 	tests := []struct {

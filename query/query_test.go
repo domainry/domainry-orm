@@ -16,12 +16,12 @@ func (legacyRenderer) Table(value string) string      { return `"` + value + `"`
 func (legacyRenderer) Placeholder(int) string         { return "?" }
 
 func TestBuilderAcceptsRendererWithoutDialectName(t *testing.T) {
-	query, args, err := query.NewSelectBuilder(legacyRenderer{}, "records").Columns("id").Where(query.Equal("id", "one")).Build()
+	queryValue, args, err := query.NewSelectBuilder(legacyRenderer{}, "records").Columns("id").Where(query.Equal("id", "one")).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if query != `SELECT "id" FROM "records" WHERE "id" = ?` || len(args) != 1 || args[0] != "one" {
-		t.Fatalf("unexpected legacy renderer result: %s %#v", query, args)
+	if queryValue != `SELECT "id" FROM "records" WHERE "id" = ?` || len(args) != 1 || args[0] != "one" {
+		t.Fatalf("unexpected legacy renderer result: %s %#v", queryValue, args)
 	}
 }
 
@@ -30,14 +30,14 @@ func TestPublishedExpressionCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	query, args, err := query.NewSelectBuilder(renderer, "records").Projections(
+	queryValue, args, err := query.NewSelectBuilder(renderer, "records").Projections(
 		query.Project(query.TableColumn("records", "id")), query.Project(query.AllColumns()),
 	).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if query != `SELECT "runtime"."records"."id", * FROM "runtime"."records"` || len(args) != 0 {
-		t.Fatalf("unexpected compatibility expression result: %s %#v", query, args)
+	if queryValue != `SELECT "runtime"."records"."id", * FROM "runtime"."records"` || len(args) != 0 {
+		t.Fatalf("unexpected compatibility expression result: %s %#v", queryValue, args)
 	}
 }
 

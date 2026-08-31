@@ -23,8 +23,6 @@ const (
 	CodeWaitTimeout   = "migration.wait_timeout"
 )
 
-// Error reports a stable migration failure while retaining the migration
-// identity needed by an application boundary to add product-specific context.
 type Error struct {
 	Code    string
 	Version uint
@@ -48,8 +46,6 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Err }
 
-// Options controls only persistence mechanics. Migration ownership, names and
-// DDL remain in the source module.
 type Options struct {
 	LedgerTable    string
 	WaitTimeout    time.Duration
@@ -58,8 +54,6 @@ type Options struct {
 	InsertConflict func(error) bool
 }
 
-// Runner applies source-owned migrations using a portable dirty-ledger
-// protocol. Callers that need an advisory lock acquire it before Apply.
 type Runner struct {
 	database sqlhost.Database
 	renderer query.Renderer
@@ -175,13 +169,13 @@ func (r *Runner) applyOne(ctx context.Context, migration Migration) error {
 	return nil
 }
 
-func (r *Runner) waitForPeer(ctx context.Context, migration Migration, checksum, query string, arguments []any) error {
+func (r *Runner) waitForPeer(ctx context.Context, migration Migration, checksum, queryValue string, arguments []any) error {
 	deadline := time.NewTimer(r.options.WaitTimeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(r.options.PollInterval)
 	defer ticker.Stop()
 	for {
-		applied, dirty, found, err := readLedger(ctx, r.database, query, arguments)
+		applied, dirty, found, err := readLedger(ctx, r.database, queryValue, arguments)
 		if err != nil {
 			return fmt.Errorf("inspect concurrent migration %d: %w", migration.Version, err)
 		}
@@ -203,10 +197,10 @@ func (r *Runner) waitForPeer(ctx context.Context, migration Migration, checksum,
 
 func readLedger(ctx context.Context, queryer interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, query string, arguments []any) (string, bool, bool, error) {
+}, queryValue string, arguments []any) (string, bool, bool, error) {
 	var checksum string
 	var dirty bool
-	err := queryer.QueryRowContext(ctx, query, arguments...).Scan(&checksum, &dirty)
+	err := queryer.QueryRowContext(ctx, queryValue, arguments...).Scan(&checksum, &dirty)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, false, nil
 	}

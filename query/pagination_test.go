@@ -59,8 +59,8 @@ func TestKeysetPaginationRejectsUnstableContracts(t *testing.T) {
 		query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, query.KeysetAscending("id"), query.KeysetAscending("name")),
 		query.NewWorkspaceSelectBuilder(renderer, "users", "workspace-a").Columns("id").FirstPage(20, query.KeysetAscending("name"), query.KeysetDescending("name")),
 	}
-	for index, query := range tests {
-		if _, _, err := query.Build(); err == nil {
+	for index, queryValue := range tests {
+		if _, _, err := queryValue.Build(); err == nil {
 			t.Fatalf("invalid keyset contract %d was accepted", index)
 		}
 	}
