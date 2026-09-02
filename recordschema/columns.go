@@ -15,12 +15,14 @@ var systemColumns = []schema.ColumnDefinition{
 	schema.Column("ext_info", schema.JSON()).NotNull().Default("empty_json"),
 	schema.Column("create_by", schema.TextKey(255)),
 	schema.Column("update_by", schema.TextKey(255)),
+	schema.Column("owner_user_id", schema.TextKey(255)),
+	schema.Column("owner_org_id", schema.TextKey(255)),
 }
 
 // SystemColumnNames returns the stable physical system-column inventory in
 // migration order.
 func SystemColumnNames() []string {
-	return []string{"workspace_id", "id", "created_at", "updated_at", "deleted", "ext_info", "create_by", "update_by"}
+	return []string{"workspace_id", "id", "created_at", "updated_at", "deleted", "ext_info", "create_by", "update_by", "owner_user_id", "owner_org_id"}
 }
 
 // SystemColumn returns the canonical definition for one Record system column.
