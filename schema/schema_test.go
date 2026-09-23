@@ -59,3 +59,22 @@ func TestPortableColumnTypeRendering(t *testing.T) {
 		})
 	}
 }
+
+func TestMySQLStringDefaultsAreRenderedAsExpressions(t *testing.T) {
+	renderer, err := dialect.ParseRenderer("mysql", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	statement, _, err := schema.NewTable(renderer, "jobs").Columns(
+		schema.Column("last_error", schema.Text()).NotNull().DefaultValue(""),
+		schema.Column("payload", schema.LongText()).NotNull().DefaultValue("{}"),
+	).Build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"`last_error` TEXT NOT NULL DEFAULT ('')", "`payload` LONGTEXT NOT NULL DEFAULT ('{}')"} {
+		if !strings.Contains(statement, required) {
+			t.Fatalf("MySQL table declaration is missing %q: %s", required, statement)
+		}
+	}
+}

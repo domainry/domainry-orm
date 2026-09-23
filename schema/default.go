@@ -38,7 +38,11 @@ func renderColumnDefault(name dialect.Name, value string) (string, error) {
 func renderColumnDefaultLiteral(name dialect.Name, value any) (string, error) {
 	switch typed := value.(type) {
 	case string:
-		return "'" + strings.ReplaceAll(typed, "'", "''") + "'", nil
+		literal := "'" + strings.ReplaceAll(typed, "'", "''") + "'"
+		if name == dialect.MySQL {
+			return "(" + literal + ")", nil
+		}
+		return literal, nil
 	case bool:
 		if name == dialect.SQLite {
 			if typed {
