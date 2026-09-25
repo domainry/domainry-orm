@@ -8,7 +8,7 @@ product or Record conventions.
 table := schema.NewTable(renderer, "migration_lock").
     Columns(
         schema.Column("name", schema.TextKey(255)).NotNull(),
-        schema.Column("acquired_at", schema.Timestamp()).NotNull(),
+        schema.Column("acquired_at", schema.BigInt()).NotNull(), // UTC Unix milliseconds
     ).
     PrimaryKey("name")
 ```

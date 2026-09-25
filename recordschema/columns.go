@@ -9,8 +9,8 @@ import (
 var systemColumns = []schema.ColumnDefinition{
 	schema.Column("workspace_id", schema.TextKey(255)).NotNull(),
 	schema.Column("id", schema.TextKey(255)).NotNull(),
-	schema.Column("created_at", schema.Timestamp()).NotNull().Default("current_timestamp"),
-	schema.Column("updated_at", schema.Timestamp()).NotNull().Default("current_timestamp"),
+	schema.Column("created_at", schema.BigInt()).NotNull().DefaultValue(0),
+	schema.Column("updated_at", schema.BigInt()).NotNull().DefaultValue(0),
 	schema.Column("deleted", schema.Boolean()).NotNull().Default("false"),
 	schema.Column("ext_info", schema.JSON()).NotNull().Default("empty_json"),
 	schema.Column("create_by", schema.TextKey(255)),

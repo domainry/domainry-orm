@@ -107,7 +107,7 @@ func (r *Runner) ensureLedger(ctx context.Context) error {
 		schema.Column("name", schema.TextKey(191)).NotNull(),
 		schema.Column("checksum", schema.TextKey(64)).NotNull(),
 		schema.Column("dirty", schema.Boolean()).NotNull(),
-		schema.Column("applied_at", schema.TextKey(40)).NotNull(),
+		schema.Column("applied_at", schema.BigInt()).NotNull(),
 	).PrimaryKey("version").Build()
 	if err != nil {
 		return fmt.Errorf("build migration ledger: %w", err)
@@ -134,7 +134,7 @@ func (r *Runner) applyOne(ctx context.Context, migration Migration) error {
 	}
 	insert, insertArguments, err := query.NewInsertBuilder(r.renderer, r.options.LedgerTable).
 		Columns("version", "name", "checksum", "dirty", "applied_at").
-		Values(migration.Version, strings.TrimSpace(migration.Name), checksum, true, "").Build()
+		Values(migration.Version, strings.TrimSpace(migration.Name), checksum, true, int64(0)).Build()
 	if err != nil {
 		return err
 	}
@@ -155,7 +155,7 @@ func (r *Runner) applyOne(ctx context.Context, migration Migration) error {
 		}
 	}
 	complete, completeArguments, err := query.NewUpdateBuilder(r.renderer, r.options.LedgerTable).
-		Set("dirty", false).Set("applied_at", r.options.Now().UTC().Format(time.RFC3339Nano)).
+		Set("dirty", false).Set("applied_at", r.options.Now().UTC().UnixMilli()).
 		Where(query.And(query.Equal("version", migration.Version), query.Equal("checksum", checksum))).Build()
 	if err != nil {
 		return err
