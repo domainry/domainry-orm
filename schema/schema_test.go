@@ -60,19 +60,19 @@ func TestPortableColumnTypeRendering(t *testing.T) {
 	}
 }
 
-func TestMySQLStringDefaultsAreRenderedAsExpressions(t *testing.T) {
+func TestMySQLStringDefaultsAreRenderedAsLiterals(t *testing.T) {
 	renderer, err := dialect.ParseRenderer("mysql", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	statement, _, err := schema.NewTable(renderer, "jobs").Columns(
-		schema.Column("last_error", schema.Text()).NotNull().DefaultValue(""),
-		schema.Column("payload", schema.LongText()).NotNull().DefaultValue("{}"),
+		schema.Column("status", schema.TextKey(64)).NotNull().DefaultValue(""),
+		schema.Column("label", schema.Varchar(255)).NotNull().DefaultValue("ready"),
 	).Build()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, required := range []string{"`last_error` TEXT NOT NULL DEFAULT ('')", "`payload` LONGTEXT NOT NULL DEFAULT ('{}')"} {
+	for _, required := range []string{"`status` VARCHAR(64) NOT NULL DEFAULT ''", "`label` VARCHAR(255) NOT NULL DEFAULT 'ready'"} {
 		if !strings.Contains(statement, required) {
 			t.Fatalf("MySQL table declaration is missing %q: %s", required, statement)
 		}
